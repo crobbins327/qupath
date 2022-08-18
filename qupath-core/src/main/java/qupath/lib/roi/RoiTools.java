@@ -682,8 +682,8 @@ public class RoiTools {
 		double h = fixedSize ? sizePreferred.height : (int)Math.ceil(bounds.getHeight() / ny);
 
 		// Center the tiles
-		xMin = (int)(bounds.getCenterX() - (nx * w * .5));
-		yMin = (int)(bounds.getCenterY() - (ny * h * .5));
+//		xMin = (int)(bounds.getCenterX() - (nx * w * .5));
+//		yMin = (int)(bounds.getCenterY() - (ny * h * .5));
 		
 		// This can be very slow if we have an extremely large number of vertices/tiles.
 		// For that reason, we try to split initially by either rows or columns if needed.
@@ -742,7 +742,7 @@ public class RoiTools {
 													x,
 													envelope.getMinY(),
 													w + overlap*2,
-													envelope.getMaxX());
+													envelope.getMaxY());
 											if (!prepared2.intersects(col))
 												return empty;
 											else if (prepared2.covers(col))
@@ -765,13 +765,13 @@ public class RoiTools {
 
 			double y = yMin + yi * h - overlap;
 			if (rowParents != null)
-				geometryLocal = rowParents.getOrDefault(y, geometry);
+				geometryLocal = rowParents.getOrDefault(yi, geometry);
 
 			for (int xi = 0; xi < nx; xi++) {
 
 				double x = xMin + xi * w - overlap;
 				if (columnParents != null)
-					geometryLocal = columnParents.getOrDefault(x, geometry);
+					geometryLocal = columnParents.getOrDefault(xi, geometry);
 				
 				if (geometryLocal.isEmpty())
 					continue;
