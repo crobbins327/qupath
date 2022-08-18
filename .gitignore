@@ -36,3 +36,5 @@ hs_err*.log
 *~.nib
 *thumbs.db
 bin/
+qupath-extension-companalysis/
+qupath-extension-debugscripteditor/
