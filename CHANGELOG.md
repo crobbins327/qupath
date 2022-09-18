@@ -75,6 +75,8 @@ This is a work-in-progress.
 * Code cleaned up and simplified, with older (previously deprecated) detection classifiers removed
   * `PathClassifierTools` methods have been moved to `PathObjectTools` and `ServerTools`
 * Support passing arguments via a map to `runPlugin`, rather than only a JSON-encoded String
+* Add `difference`, `symDifference` and `subtract` methods to `RoiTools` (https://github.com/qupath/qupath/issues/995)
+* Add `ROI.updatePlane(plane)` method to move a ROI to a different z-slice or timepoint (https://github.com/qupath/qupath/issues/1052)
 
 ### Bugs fixed
 * Reading from Bio-Formats blocks forever when using multiple series outside a project (https://github.com/qupath/qupath/issues/894)
@@ -94,7 +96,8 @@ This is a work-in-progress.
 * Locked point annotations can still be edited (https://github.com/qupath/qupath/issues/1001)
 * 'Normalized OD colors' should not be available for RGB fluorescence images (https://github.com/qupath/qupath/issues/1006)
 * Training a new object classifier with the same settings and annotations can give a different result when an image is reopened (https://github.com/qupath/qupath/issues/1016)
-# It isn't possible to run cell detection on channels with " in the name (https://github.com/qupath/qupath/issues/1022)
+* It isn't possible to run cell detection on channels with " in the name (https://github.com/qupath/qupath/issues/1022)
+* Fix occasional "One of the arguments' values is out of range" exception with Delaunay triangulation
 
 ### Changes through Bio-Formats 6.10.1
 * Bio-Formats 6.10.1 brings several important new features to QuPath, including:
