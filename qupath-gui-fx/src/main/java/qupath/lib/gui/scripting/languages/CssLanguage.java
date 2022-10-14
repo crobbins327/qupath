@@ -24,30 +24,29 @@ package qupath.lib.gui.scripting.languages;
 import java.util.ServiceLoader;
 
 /**
- * Class for the representation of Plain text in QuPath.
- * <p>
- * This class stores the QuPath implementation of Plain syntaxing and plain auto-completion (both do nothing, as it's plain text).
- * @author Melvin Gelbard
+ * Class for representing CSS in QuPath.
+ * 
+ * @author Pete Bankhead
  * @since v0.4.0
  */
-public class PlainLanguage extends ScriptLanguage {
+public class CssLanguage extends ScriptLanguage {
 	
 	/**
 	 * Instance of this language. Can't be final because of {@link ServiceLoader}.
 	 */
-	private static PlainLanguage INSTANCE;
+	private static CssLanguage INSTANCE;
 	
 	private ScriptSyntax syntax;
 	private ScriptAutoCompletor completor;
-
+	
 	/**
-	 * Constructor for a simple Plain Language. This constructor should never be 
+	 * Constructor for JSON language. This constructor should never be 
 	 * called. Instead, use the static {@link #getInstance()} method.
 	 * <p>
 	 * Note: this has to be public for the {@link ServiceLoader} to work.
 	 */
-	public PlainLanguage() {
-		super("None", new String[]{".txt"});
+	public CssLanguage() {
+		super("CSS", new String[]{".css"});
 		this.syntax = PlainSyntax.getInstance();
 		this.completor = new PlainAutoCompletor();
 		
@@ -55,14 +54,14 @@ public class PlainLanguage extends ScriptLanguage {
 			throw new UnsupportedOperationException("Language classes cannot be instantiated more than once!");
 		
 		// Because of ServiceLoader, have to assign INSTANCE here.
-		PlainLanguage.INSTANCE = this;
+		CssLanguage.INSTANCE = this;
 	}
-	
+
 	/**
 	 * Get the static instance of this class.
 	 * @return instance
 	 */
-	public static PlainLanguage getInstance() {
+	public static CssLanguage getInstance() {
 		return INSTANCE;
 	}
 	

@@ -11,8 +11,9 @@ This is a work-in-progress.
   * All objects can now have IDs
     * This aims to make it much easier to match up objects whenever some further analysis is done elsewhere (e.g. classification or clustering in Python or R)
     * See https://github.com/qupath/qupath/pull/959
+* Support user styling via CSS (https://github.com/qupath/qupath/pull/1063)
 * Many script editor improvements, including:
-  * Syntax highlighting for Markdown, JSON and XML documents
+  * Syntax highlighting for Markdown, JSON, YAML and XML documents
   * Added 'Replace/Next' and 'Replace all' features to Find window (https://github.com/qupath/qupath/pull/898)
   * New lines now trigger caret following (https://github.com/qupath/qupath/pull/900)
   * Proper tab handling (https://github.com/qupath/qupath/pull/902)
@@ -98,9 +99,11 @@ This is a work-in-progress.
 * Training a new object classifier with the same settings and annotations can give a different result when an image is reopened (https://github.com/qupath/qupath/issues/1016)
 * It isn't possible to run cell detection on channels with " in the name (https://github.com/qupath/qupath/issues/1022)
 * Fix occasional "One of the arguments' values is out of range" exception with Delaunay triangulation
+* The colors used in pie chart legends were sometimes incorrect (https://github.com/qupath/qupath/issues/1062)
+# Delaunay connection lines could be broken or slow to display (https://github.com/qupath/qupath/pull/1069)
 
-### Changes through Bio-Formats 6.10.1
-* Bio-Formats 6.10.1 brings several important new features to QuPath, including:
+### Changes through Bio-Formats 6.11.0
+* Bio-Formats 6.11.0 brings several important new features to QuPath, including:
   * Support for reading DICOM whole slide images
   * Improved handling of brightfield CZI images (i.e. filling unscanned regions in white, not black)
   * Substantial performance improvements for reading/writing some formats (including OME-TIFF)
@@ -111,17 +114,19 @@ This is a work-in-progress.
 
 ### Dependency updates
 * Adoptium OpenJDK 17
-* Bio-Formats 6.10.1
-* JavaFX 18.0.2
+* Bio-Formats 6.11.0
+* JavaFX 19.0.0
 * Java Topology Suite 1.19.0
-* Groovy 4.0.4
+* Groovy 4.0.5
 * Gson 2.9.1
 * Guava 31.1
 * ikonli 12.3.1
 * JavaCPP 1.5.7
 * JFreeSVG 5.0.3
+* Logback 1.3.1
 * OpenCV 4.5.5
 * Picocli 4.6.3
+* SLF4J 2.0.0
 
 
 ## Version 0.3.2
