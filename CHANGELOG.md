@@ -22,6 +22,9 @@ This is a work-in-progress.
     * Smart parentheses and (double/single) quotes (https://github.com/qupath/qupath/pull/907)
     * Comment block handling (https://github.com/qupath/qupath/pull/908)
   * New 'Edit -> Wrap lines', 'Edit -> Replace curly quotes' and 'Edit -> Zap gremlins' options
+* Pixel classifier improvements
+  * Making measurements is *much* faster in some circumstances (https://github.com/qupath/qupath/pull/1076)
+  * It's possible to restrict live prediction more closely to annotated regions ((https://github.com/qupath/qupath/pull/1076))
 * New 'Analyze -> Spatial analysis -> Signed distance to annotations 2D' command (https://github.com/qupath/qupath/issues/1032)
 * Better support for opening/importing from files containing multiple images
   * New 'Show image selector' option when adding images to a project
@@ -115,6 +118,7 @@ This is a work-in-progress.
 ### Dependency updates
 * Adoptium OpenJDK 17
 * Bio-Formats 6.11.0
+* ControlsFX 11.1.2
 * JavaFX 19.0.0
 * Java Topology Suite 1.19.0
 * Groovy 4.0.5
