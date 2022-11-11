@@ -63,7 +63,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.ServiceLoader;
 import java.util.Set;
-import java.util.Optional;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -93,6 +92,7 @@ import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ObservableBooleanValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ListChangeListener.Change;
@@ -100,7 +100,6 @@ import javafx.collections.ObservableList;
 import javafx.embed.swing.JFXPanel;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.event.ActionEvent;
-import javafx.event.Event;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
@@ -113,10 +112,9 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.ButtonBar.ButtonData;
 import javafx.scene.control.ButtonType;
-import javafx.scene.control.CheckBox;
 import javafx.scene.control.CheckMenuItem;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
-import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.Menu;
@@ -129,6 +127,7 @@ import javafx.scene.control.SplitPane.Divider;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TabPane.TabClosingPolicy;
+import javafx.scene.control.TabPane.TabDragPolicy;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
@@ -142,7 +141,6 @@ import javafx.scene.control.TreeTableView;
 import javafx.scene.control.TreeView;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
@@ -155,12 +153,11 @@ import javafx.scene.layout.Border;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.BorderStroke;
 import javafx.scene.layout.BorderStrokeStyle;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Region;
-import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Ellipse;
 import javafx.scene.shape.Rectangle;
-import javafx.scene.text.Font;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.Window;
@@ -181,7 +178,6 @@ import qupath.lib.gui.commands.LogViewerCommand;
 import qupath.lib.gui.commands.ProjectCommands;
 import qupath.lib.gui.commands.TMACommands;
 import qupath.lib.gui.dialogs.Dialogs;
-import qupath.lib.gui.dialogs.ParameterPanelFX;
 import qupath.lib.gui.dialogs.Dialogs.DialogButton;
 import qupath.lib.gui.extensions.GitHubProject;
 import qupath.lib.gui.extensions.GitHubProject.GitHubRepo;
@@ -201,14 +197,18 @@ import qupath.lib.gui.panes.SelectedMeasurementTableView;
 import qupath.lib.gui.panes.ServerSelector;
 import qupath.lib.gui.panes.WorkflowCommandLogView;
 import qupath.lib.gui.prefs.PathPrefs;
+import qupath.lib.gui.prefs.PathPrefs.AutoUpdateType;
 import qupath.lib.gui.prefs.PathPrefs.ImageTypeSetting;
 import qupath.lib.gui.prefs.QuPathStyleManager;
 import qupath.lib.gui.scripting.ScriptEditor;
+import qupath.lib.gui.scripting.ScriptEditorControl;
 import qupath.lib.gui.scripting.languages.GroovyLanguage;
+import qupath.lib.gui.scripting.languages.ScriptLanguageProvider;
 import qupath.lib.gui.tools.ColorToolsFX;
 import qupath.lib.gui.tools.CommandFinderTools;
 import qupath.lib.gui.tools.GuiTools;
 import qupath.lib.gui.tools.MenuTools;
+import qupath.lib.gui.tools.PaneTools;
 import qupath.lib.gui.tools.IconFactory.PathIcons;
 import qupath.lib.gui.viewer.DragDropImportListener;
 import qupath.lib.gui.viewer.OverlayOptions;
@@ -235,7 +235,6 @@ import qupath.lib.objects.PathObjectTools;
 import qupath.lib.objects.PathObjects;
 import qupath.lib.objects.TMACoreObject;
 import qupath.lib.objects.classes.PathClass;
-import qupath.lib.objects.classes.PathClassFactory;
 import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 import qupath.lib.objects.hierarchy.TMAGrid;
 import qupath.lib.plugins.PathInteractivePlugin;
@@ -247,7 +246,12 @@ import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.projects.Projects;
 import qupath.lib.roi.RoiTools;
 import qupath.lib.roi.interfaces.ROI;
+import qupath.lib.scripting.QP;
+import qupath.lib.scripting.ScriptParameters;
+import qupath.lib.scripting.languages.ExecutableLanguage;
+import qupath.lib.scripting.languages.ScriptLanguage;
 import qupath.lib.gui.scripting.DefaultScriptEditor;
+import qupath.lib.gui.scripting.QPEx;
 
 
 
@@ -313,7 +317,7 @@ public class QuPathGUI {
 	private BooleanProperty zoomToFit = new SimpleBooleanProperty(false);
 	
 	private BorderPane pane; // Main component, to hold toolbar & splitpane
-	private TabPane analysisPanel = new TabPane();
+	private TabPane analysisTabPane = new TabPane();
 	private Region mainViewerPane;
 	
 	private ViewerPlusDisplayOptions viewerDisplayOptions = new ViewerPlusDisplayOptions();
@@ -360,6 +364,8 @@ public class QuPathGUI {
 	private BooleanBinding uiBlocked = pluginRunning.or(scriptRunning);
 	
 	private SimpleBooleanProperty showInputDisplayProperty = new SimpleBooleanProperty(false);
+	
+	private LogViewerCommand logViewerCommand = new LogViewerCommand(QuPathGUI.this);
 	
 	/**
 	 * Create an {@link Action} that depends upon an {@link ImageData}.
@@ -553,6 +559,7 @@ public class QuPathGUI {
 		 */
 		@ActionAccelerator("shift+s")
 		@ActionIcon(PathIcons.SELECTION_MODE)
+		@ActionDescription("Turn on/off selection mode - this converts drawing tools into selection tools")
 		public final Action SELECTION_MODE = ActionTools.createSelectableAction(PathPrefs.selectionModeProperty(), "Selection mode");
 		
 		// Toolbar actions
@@ -561,28 +568,33 @@ public class QuPathGUI {
 		 */
 		@ActionIcon(PathIcons.CONTRAST)
 		@ActionAccelerator("shift+c")
+		@ActionDescription("Open brightness & contrast dialog - also used to adjust channels and colors")
 		public final Action BRIGHTNESS_CONTRAST = ActionTools.createAction(new BrightnessContrastCommand(QuPathGUI.this), "Brightness/Contrast");
 		
 		/**
 		 * Toggle the image overview display on the viewers.
 		 */
 		@ActionIcon(PathIcons.OVERVIEW)
+		@ActionDescription("Show/hide overview image (top right)")
 		public final Action SHOW_OVERVIEW = ActionTools.createSelectableAction(viewerDisplayOptions.showOverviewProperty(), "Show slide overview");
 		/**
 		 * Toggle the cursor location display on the viewers.
 		 */
 		@ActionIcon(PathIcons.LOCATION)
+		@ActionDescription("Show/hide location text (bottom right)")
 		public final Action SHOW_LOCATION = ActionTools.createSelectableAction(viewerDisplayOptions.showLocationProperty(), "Show cursor location");
 		/**
 		 * Toggle the scalebar display on the viewers.
 		 */
 		@ActionIcon(PathIcons.SHOW_SCALEBAR)
+		@ActionDescription("Show/hide scalebar (bottom left)")
 		public final Action SHOW_SCALEBAR = ActionTools.createSelectableAction(viewerDisplayOptions.showScalebarProperty(), "Show scalebar");
 		/**
 		 * Toggle the counting grid display on the viewers.
 		 */
 		@ActionIcon(PathIcons.GRID)
 		@ActionAccelerator("shift+g")
+		@ActionDescription("Show/hide counting grid overlay")
 		public final Action SHOW_GRID = ActionTools.createSelectableAction(overlayOptions.showGridProperty(), "Show grid");
 		/**
 		 * Prompt to set the spacing for the counting grid.
@@ -599,6 +611,7 @@ public class QuPathGUI {
 		 */
 		@ActionIcon(PathIcons.PIXEL_CLASSIFICATION)
 		@ActionAccelerator("c")
+		@ActionDescription("Show/hide pixel classification overlay (when available)")
 		public final Action SHOW_PIXEL_CLASSIFICATION = ActionTools.createSelectableAction(overlayOptions.showPixelClassificationProperty(), "Show pixel classification");
 			
 		// TMA actions
@@ -634,12 +647,15 @@ public class QuPathGUI {
 		 */
 		@ActionIcon(PathIcons.ANNOTATIONS)
 		@ActionAccelerator("a")
+		@ActionDescription("Show/hide annotation objects")
 		public final Action SHOW_ANNOTATIONS = ActionTools.createSelectableAction(overlayOptions.showAnnotationsProperty(), "Show annotations");
 		
 		/**
 		 * Toggle the display of annotation names.
 		 */
+		@ActionIcon(PathIcons.SHOW_NAMES)
 		@ActionAccelerator("n")
+		@ActionDescription("Show/hide annotation names (where available)")
 		public final Action SHOW_NAMES = ActionTools.createSelectableAction(overlayOptions.showNamesProperty(), "Show names");
 		
 		/**
@@ -647,6 +663,7 @@ public class QuPathGUI {
 		 */
 		@ActionIcon(PathIcons.ANNOTATIONS_FILL)
 		@ActionAccelerator("shift+f")
+		@ActionDescription("Full/unfill annotation objects")
 		public final Action FILL_ANNOTATIONS = ActionTools.createSelectableAction(overlayOptions.fillAnnotationsProperty(), "Fill annotations");	
 		
 		/**
@@ -654,6 +671,7 @@ public class QuPathGUI {
 		 */
 		@ActionIcon(PathIcons.TMA_GRID)
 		@ActionAccelerator("g")
+		@ActionDescription("Show/hide TMA grid")
 		public final Action SHOW_TMA_GRID = ActionTools.createSelectableAction(overlayOptions.showTMAGridProperty(), "Show TMA grid");
 		/**
 		 * Toggle the display of TMA grid labels.
@@ -665,6 +683,7 @@ public class QuPathGUI {
 		 */
 		@ActionIcon(PathIcons.DETECTIONS)
 		@ActionAccelerator("d")
+		@ActionDescription("Show/hide detection objects")
 		public final Action SHOW_DETECTIONS = ActionTools.createSelectableAction(overlayOptions.showDetectionsProperty(), "Show detections");
 		
 		/**
@@ -672,6 +691,7 @@ public class QuPathGUI {
 		 */
 		@ActionIcon(PathIcons.DETECTIONS_FILL)
 		@ActionAccelerator("f")
+		@ActionDescription("Fill/unfill detection objects")
 		public final Action FILL_DETECTIONS = ActionTools.createSelectableAction(overlayOptions.fillDetectionsProperty(), "Fill detections");	
 		/**
 		 * Display the convex hull of point ROIs.
@@ -683,6 +703,7 @@ public class QuPathGUI {
 		 * Toggle the synchronization of multiple viewers.
 		 */
 		@ActionAccelerator("shortcut+alt+s")
+		@ActionDescription("Synchronize viewers, so that pan, zoom and rotate in one viewer also impacts the other viewers")
 		public final Action TOGGLE_SYNCHRONIZE_VIEWERS = ActionTools.createSelectableAction(viewerManager.synchronizeViewersProperty(), "Synchronize viewers");
 		/**
 		 * Match the resolution of all open viewers.
@@ -693,7 +714,7 @@ public class QuPathGUI {
 		 * Show the main log window.
 		 */
 		@ActionAccelerator("shortcut+shift+l")
-		public final Action SHOW_LOG = ActionTools.createAction(new LogViewerCommand(QuPathGUI.this), "Show log");
+		public final Action SHOW_LOG = ActionTools.createAction(logViewerCommand, "Show log");
 
 		/**
 		 * Toggle the visibility of the 'Analysis pane' in the main viewer.
@@ -726,6 +747,18 @@ public class QuPathGUI {
 		@ActionDescription("Show summary measurements for detection objects")
 		public final Action MEASURE_DETECTIONS = createImageDataAction(imageData -> Commands.showDetectionMeasurementTable(QuPathGUI.this, imageData), "Show detection measurements");
 		
+		/**
+		 * Show grid view for annotation measurements.
+		 */
+		@ActionDescription("Show grid view annotation objects")
+		public final Action MEASURE_GRID_ANNOTATIONS = createImageDataAction(imageData -> Commands.showAnnotationGridView(QuPathGUI.this), "Show annotation grid view");
+
+		/**
+		 * Show grid view for TMA core measurements.
+		 */
+		@ActionDescription("Show grid view TMA cores")
+		public final Action MEASURE_GRID_TMA_CORES = createImageDataAction(imageData -> Commands.showAnnotationGridView(QuPathGUI.this), "Show TMA core grid view");
+
 		private DefaultActions() {
 			// This has the effect of applying the annotations
 			ActionTools.getAnnotatedActions(this);
@@ -1198,6 +1231,10 @@ public class QuPathGUI {
 		if (!startupQuietly)
 			showStartupMessage();
 		
+		// Add listeners to set default project and image data
+		imageDataProperty.addListener((v, o, n) -> QP.setDefaultImageData(n));
+		projectProperty.addListener((v, o, n) -> QP.setDefaultProject(n));
+		
 		// Run startup script, if we can
 		try {
 			runStartupScript();			
@@ -1494,8 +1531,9 @@ public class QuPathGUI {
 	 * Do an update check.
 	 * @param isAutoCheck if true, avoid prompting the user unless an update is available. If false, the update has been explicitly 
 	 *                    requested and so the user should be notified of the outcome, regardless of whether an update is found.
+	 * @param updateCheckType
 	 */
-	private synchronized void doUpdateCheck(boolean isAutoCheck) {
+	private synchronized void doUpdateCheck(AutoUpdateType updateCheckType, boolean isAutoCheck) {
 
 		String title = "Update check";
 
@@ -1506,15 +1544,18 @@ public class QuPathGUI {
 		// Start with the main app
 		var qupathVersion = getVersion();
 		if (qupathVersion != null && qupathVersion != Version.UNKNOWN) {
-			projects.put(GitHubRepo.create("QuPath", "qupath", "qupath"), qupathVersion);
+			if (updateCheckType == AutoUpdateType.QUPATH_ONLY || updateCheckType == AutoUpdateType.QUPATH_AND_EXTENSIONS)
+				projects.put(GitHubRepo.create("QuPath", "qupath", "qupath"), qupathVersion);
 		}
 		
 		// Work through extensions
-		for (var ext : getLoadedExtensions()) {
-			var v = ext.getVersion();
-			if (v != null && v != Version.UNKNOWN && ext instanceof GitHubProject) {
-				var project = (GitHubProject)ext;
-				projects.put(project.getRepository(), v);
+		if (updateCheckType == AutoUpdateType.QUPATH_AND_EXTENSIONS || updateCheckType == AutoUpdateType.EXTENSIONS_ONLY) {
+			for (var ext : getLoadedExtensions()) {
+				var v = ext.getVersion();
+				if (v != null && v != Version.UNKNOWN && ext instanceof GitHubProject) {
+					var project = (GitHubProject)ext;
+					projects.put(project.getRepository(), v);
+				}
 			}
 		}
 		
@@ -1593,13 +1634,21 @@ public class QuPathGUI {
 		table.setPrefHeight(200);
 		table.setPrefWidth(500);
 		
-		var checkbox = new CheckBox("Automatically check for updates on startup");
-		checkbox.setSelected(PathPrefs.doAutoUpdateCheckProperty().get());
-		checkbox.setMaxWidth(Double.MAX_VALUE);
 		
-		var pane = new BorderPane(table);
-		checkbox.setPadding(new Insets(5, 0, 0, 0));
-		pane.setBottom(checkbox);
+		var comboUpdates = new ComboBox<AutoUpdateType>();
+		comboUpdates.getItems().setAll(AutoUpdateType.values());
+		comboUpdates.getSelectionModel().select(PathPrefs.autoUpdateCheckProperty().get());
+		var labelUpdates = new Label("Check for updates:");
+		labelUpdates.setLabelFor(comboUpdates);
+		labelUpdates.setAlignment(Pos.CENTER_RIGHT);
+		
+		var paneUpdates = new GridPane();
+		paneUpdates.add(labelUpdates, 0, 0);
+		paneUpdates.add(comboUpdates, 1, 0);
+		PaneTools.setToExpandGridPaneHeight(comboUpdates);
+		paneUpdates.setPadding(new Insets(5, 0, 0, 0));
+		
+		pane.setBottom(paneUpdates);
 		
 		var result = new Dialogs.Builder()
 				.buttons(ButtonType.OK)
@@ -1611,7 +1660,7 @@ public class QuPathGUI {
 				.orElse(ButtonType.CANCEL) == ButtonType.OK;
 		
 		if (result) {
-			PathPrefs.doAutoUpdateCheckProperty().set(checkbox.isSelected());
+			PathPrefs.autoUpdateCheckProperty().set(comboUpdates.getSelectionModel().getSelectedItem());
 		}
 	}
 	
@@ -1628,10 +1677,11 @@ public class QuPathGUI {
 	 * 					  and the user won't be prompted if no update is available.
 	 */
 	void checkForUpdate(final boolean isAutoCheck) {
-		
+		AutoUpdateType checkType;
 		if (isAutoCheck) {
-			// Don't run auto check if the user doesn't want it
-			boolean doAutoUpdateCheck = PathPrefs.doAutoUpdateCheckProperty().get();
+			// For automated checks, respect the user preferences for QuPath, extensions or neither
+			checkType = PathPrefs.autoUpdateCheckProperty().get();
+			boolean doAutoUpdateCheck = checkType != null && checkType != AutoUpdateType.NONE;
 			if (!doAutoUpdateCheck)
 				return;
 
@@ -1643,9 +1693,13 @@ public class QuPathGUI {
 				logger.trace("Skipping update check (I already checked recently)");
 				return;
 			}
+		} else {
+			// Check everything when explicitly requested
+			checkType = AutoUpdateType.QUPATH_AND_EXTENSIONS;
 		}
+		
 		// Run the check in a background thread
-		createSingleThreadExecutor(this).execute(() -> doUpdateCheck(isAutoCheck));
+		createSingleThreadExecutor(this).execute(() -> doUpdateCheck(checkType, isAutoCheck));
 	}
 	
 		
@@ -1880,7 +1934,7 @@ public class QuPathGUI {
 			msg = dirDefault.getAbsolutePath() + " already exists.\n" +
 					"Do you want to use this default, or specify another directory?";
 		} else {
-			msg = String.format("Do you want to create a new user directory at %s?\n",
+			msg = String.format("Do you want to create a new user directory at\n %s?",
 					dirDefault.getAbsolutePath());
 		}
 		
@@ -1940,7 +1994,7 @@ public class QuPathGUI {
 			// Therefore if we find some non-unique nor null elements, correct the list as soon as possible
 			var list = c.getList();
 			var set = new LinkedHashSet<PathClass>();
-			set.add(PathClassFactory.getPathClassUnclassified());
+			set.add(PathClass.NULL_CLASS);
 			set.addAll(list);
 			set.remove(null);
 			if (!(set.size() == list.size() && set.containsAll(list))) {
@@ -1966,16 +2020,16 @@ public class QuPathGUI {
 	 */
 	public boolean resetAvailablePathClasses() {
 		List<PathClass> pathClasses = Arrays.asList(
-				PathClassFactory.getPathClassUnclassified(),
-				PathClassFactory.getPathClass(PathClassFactory.StandardPathClasses.TUMOR),
-				PathClassFactory.getPathClass(PathClassFactory.StandardPathClasses.STROMA),
-				PathClassFactory.getPathClass(PathClassFactory.StandardPathClasses.IMMUNE_CELLS),
-				PathClassFactory.getPathClass(PathClassFactory.StandardPathClasses.NECROSIS),
-				PathClassFactory.getPathClass(PathClassFactory.StandardPathClasses.OTHER),
-				PathClassFactory.getPathClass(PathClassFactory.StandardPathClasses.REGION),
-				PathClassFactory.getPathClass(PathClassFactory.StandardPathClasses.IGNORE),
-				PathClassFactory.getPathClass(PathClassFactory.StandardPathClasses.POSITIVE),
-				PathClassFactory.getPathClass(PathClassFactory.StandardPathClasses.NEGATIVE)
+				PathClass.NULL_CLASS,
+				PathClass.StandardPathClasses.TUMOR,
+				PathClass.StandardPathClasses.STROMA,
+				PathClass.StandardPathClasses.IMMUNE_CELLS,
+				PathClass.StandardPathClasses.NECROSIS,
+				PathClass.StandardPathClasses.OTHER,
+				PathClass.StandardPathClasses.REGION,
+				PathClass.StandardPathClasses.IGNORE,
+				PathClass.StandardPathClasses.POSITIVE,
+				PathClass.StandardPathClasses.NEGATIVE
 				);
 		
 		if (availablePathClasses == null) {
@@ -2001,7 +2055,7 @@ public class QuPathGUI {
 			List<PathClass> pathClassesOriginal = (List<PathClass>)in.readObject();
 			List<PathClass> pathClasses = new ArrayList<>();
 			for (PathClass pathClass : pathClassesOriginal) {
-				PathClass singleton = PathClassFactory.getSingletonPathClass(pathClass);
+				PathClass singleton = PathClass.getSingleton(pathClass);
 				// Ensure the color is set
 				if (singleton != null && pathClass.getColor() != null)
 					singleton.setColor(pathClass.getColor());
@@ -2012,102 +2066,6 @@ public class QuPathGUI {
 			logger.error("Error loading classes", e);
 			return Collections.emptyList();
 		}
-	}
-
-	
-	/**
-	 * Show a dialog requesting setup parameters
-	 * 
-	 * @return
-	 */
-	public boolean showSetupDialog() {
-		// Show a setup message
-		Dialog<ButtonType> dialog = new Dialog<>();
-		dialog.setTitle("QuPath setup");
-		dialog.initOwner(getStage());
-
-		// Try to get an image to display
-		Image img = loadIcon(128);
-		BorderPane pane = new BorderPane();
-		if (img != null) {
-			StackPane imagePane = new StackPane(new ImageView(img));
-			imagePane.setPadding(new Insets(10, 10, 10, 10));
-			pane.setLeft(imagePane);
-		}
-
-		
-		long maxMemoryMB = Runtime.getRuntime().maxMemory() / 1024 / 1024;
-		String maxMemoryString = String.format("Current maximum memory is %.2f GB.", maxMemoryMB/1024.0);
-		
-		boolean canSetMemory = PathPrefs.hasJavaPreferences();
-
-		ParameterList paramsSetup = new ParameterList()
-				.addTitleParameter("Memory");
-		
-		double originalMaxMemory = Math.ceil(maxMemoryMB/1024.0);
-		if (canSetMemory) {
-			paramsSetup.addEmptyParameter("Set the maximum memory used by QuPath.");
-//					.addEmptyParameter(maxMemoryString);
-	
-			boolean lowMemory = maxMemoryMB < 1024*6;
-			if (lowMemory) {
-				paramsSetup.addEmptyParameter(
-						"It is suggested to increase the memory limit to approximately\nhalf of the RAM available on your computer."
-						);
-			}
-			
-			paramsSetup.addDoubleParameter("maxMemoryGB", "Maximum memory", originalMaxMemory, "GB",
-					"Set the maximum memory for Java.\n"
-					+ "Note that some commands (e.g. pixel classification) may still use more memory when needed,\n"
-					+ "so this value should generally not exceed half the total memory available on the system.");
-		} else {
-			paramsSetup.addEmptyParameter(maxMemoryString)
-				.addEmptyParameter("Sorry, I can't access the config file needed to change the max memory.\n" +
-							"See the QuPath installation instructions for more details.");
-		}
-		
-		paramsSetup.addTitleParameter("Updates")
-				.addBooleanParameter("checkForUpdates", "Check for updates on startup (recommended)", PathPrefs.doAutoUpdateCheckProperty().get(), "Specify whether to automatically prompt to download the latest QuPath on startup (required internet connection)")	
-				;
-
-		ParameterPanelFX parameterPanel = new ParameterPanelFX(paramsSetup);
-		pane.setCenter(parameterPanel.getPane());
-				
-		Label labelMemory;
-		if (canSetMemory) {
-			labelMemory = new Label("You will need to restart QuPath for memory changes to take effect");
-			labelMemory.setStyle("-fx-font-weight: bold;");
-			labelMemory.setMaxWidth(Double.MAX_VALUE);
-			labelMemory.setAlignment(Pos.CENTER);
-			labelMemory.setFont(Font.font("Arial"));
-			labelMemory.setPadding(new Insets(10, 10, 10, 10));
-			pane.setBottom(labelMemory);
-		}
-		
-//		dialog.initStyle(StageStyle.UNDECORATED);
-		dialog.getDialogPane().setContent(pane);
-		dialog.getDialogPane().getButtonTypes().setAll(ButtonType.APPLY, ButtonType.CANCEL);
-
-		Optional<ButtonType> result = dialog.showAndWait();
-		if (!result.isPresent() || !ButtonType.APPLY.equals(result.get()))
-			return false;
-		
-		PathPrefs.doAutoUpdateCheckProperty().set(paramsSetup.getBooleanParameterValue("checkForUpdates"));
-		
-		if (canSetMemory && paramsSetup.containsKey("maxMemoryGB")) {
-			int maxMemorySpecifiedMB = (int)(Math.round(paramsSetup.getDoubleParameterValue("maxMemoryGB") * 1024));
-			if (maxMemorySpecifiedMB >= 1024) {
-				PathPrefs.maxMemoryMBProperty().set(maxMemorySpecifiedMB);
-			} else {
-				if (maxMemorySpecifiedMB >= 0)
-					Dialogs.showErrorNotification("Max memory setting", "Specified maximum memory setting too low - it must be at least 1 GB");
-				else
-					logger.warn("Requested max memory must be at least 1 GB - specified value {} will be ignored", paramsSetup.getDoubleParameterValue("maxMemoryGB"));
-//				PathPrefs.maxMemoryMBProperty().set(-1);
-			}
-		}
-		
-		return true;
 	}
 	
 	
@@ -2164,6 +2122,27 @@ public class QuPathGUI {
 	
 	
 	
+	
+	private Menu createRecentProjectsMenu() {
+		
+		// Create a recent projects list in the File menu
+		ObservableList<URI> recentProjects = PathPrefs.getRecentProjectList();
+		Menu menuRecent = GuiTools.createRecentItemsMenu("Recent projects...", recentProjects, uri -> {
+			Project<BufferedImage> project;
+			try {
+				project = ProjectIO.loadProject(uri, BufferedImage.class);
+				setProject(project);
+			} catch (Exception e1) {
+				Dialogs.showErrorMessage("Project error", "Cannot find project " + uri);
+				logger.error("Error loading project", e1);
+			}
+		}, Project::getNameFromURI);
+		
+		return menuRecent;
+	}
+	
+	
+	
 	private BorderPane initializeMainComponent() {
 		
 		pane = new BorderPane();
@@ -2190,11 +2169,11 @@ public class QuPathGUI {
 
 //		analysisPanel = createAnalysisPanel();
 		initializeAnalysisPanel();
-		analysisPanel.setMinWidth(300);
-		analysisPanel.setPrefWidth(400);
-		splitPane.setMinWidth(analysisPanel.getMinWidth() + 200);
-		splitPane.setPrefWidth(analysisPanel.getPrefWidth() + 200);
-		SplitPane.setResizableWithParent(analysisPanel, Boolean.FALSE);		
+		analysisTabPane.setMinWidth(300);
+		analysisTabPane.setPrefWidth(400);
+		splitPane.setMinWidth(analysisTabPane.getMinWidth() + 200);
+		splitPane.setPrefWidth(analysisTabPane.getPrefWidth() + 200);
+		SplitPane.setResizableWithParent(analysisTabPane, Boolean.FALSE);		
 
 		
 //		paneCommands.setRight(cbPin);
@@ -2202,7 +2181,7 @@ public class QuPathGUI {
 		mainViewerPane = CommandFinderTools.createCommandFinderPane(this, viewerManager.getNode(), CommandFinderTools.commandBarDisplayProperty());
 //		paneViewer.setTop(tfCommands);
 //		paneViewer.setCenter(viewerManager.getNode());
-		splitPane.getItems().addAll(analysisPanel, mainViewerPane);
+		splitPane.getItems().addAll(analysisTabPane, mainViewerPane);
 //		splitPane.getItems().addAll(viewerManager.getComponent());
 		SplitPane.setResizableWithParent(viewerManager.getNode(), Boolean.TRUE);
 		
@@ -2239,7 +2218,18 @@ public class QuPathGUI {
 	}
 	
 	
-	
+	/**
+	 * Access the main tab pane shown in the QuPath window.
+	 * This enables extensions to add or remove tabs - but be cautious!
+	 * <ul>
+	 * <li>Removing tabs can impact other functionality</li>
+	 * <li>If adding a tab, it is usually best to apply {@link GuiTools#makeTabUndockable(Tab)}</li>
+	 * </ul>
+	 * @return
+	 */
+	public TabPane getAnalysisTabPane() {
+		return analysisTabPane;
+	}
 
 	
 	/**
@@ -2551,10 +2541,6 @@ public class QuPathGUI {
 	}
 	
 	
-	
-	
-	
-	
 	private void setViewerPopupMenu(final QuPathViewerPlus viewer) {
 		
 		final ContextMenu popup = new ContextMenu();
@@ -2565,9 +2551,9 @@ public class QuPathGUI {
 		miAddColumn.setOnAction(e -> viewerManager.addColumn(viewer));
 		
 		MenuItem miRemoveRow = new MenuItem("Remove row");
-		miRemoveRow.setOnAction(e -> viewerManager.removeViewerRow(viewer));
+		miRemoveRow.setOnAction(e -> viewerManager.removeRow(viewer));
 		MenuItem miRemoveColumn = new MenuItem("Remove column");
-		miRemoveColumn.setOnAction(e -> viewerManager.removeViewerColumn(viewer));
+		miRemoveColumn.setOnAction(e -> viewerManager.removeColumn(viewer));
 
 		MenuItem miCloseViewer = new MenuItem("Close viewer");
 		miCloseViewer.setOnAction(e -> {
@@ -3252,8 +3238,8 @@ public class QuPathGUI {
 	public MenuItem installGroovyCommand(String menuPath, final File file) {
 		return installCommand(menuPath, () -> {
 			try {
-				runScript(file, getImageData());
-			} catch (IOException | ScriptException e) {
+				runScript(file, null);
+			} catch (ScriptException e) {
 				Dialogs.showErrorMessage("Script error", e);
 			}
 		});
@@ -3271,7 +3257,7 @@ public class QuPathGUI {
 	public MenuItem installGroovyCommand(String menuPath, final String script) {
 		return installCommand(menuPath, () -> {
 			try {
-				runScript(script, getImageData());
+				runScript(null, script);
 			} catch (ScriptException e) {
 				Dialogs.showErrorMessage("Script error", e);
 			}
@@ -3360,28 +3346,35 @@ public class QuPathGUI {
 		
 	
 	/**
-	 * Convenience method to execute a Groovy script.
+	 * Convenience method to execute a script.
+	 * Either a script file or the text of the script must be provided, or both.
+	 * <p>
+	 * If only the script text is given, the language is assumed to be Groovy.
+	 * 
+	 * @param file the file containing the script to run
 	 * @param script the script to run
-	 * @param imageData an {@link ImageData} object for the current image (may be null)
 	 * @return result of the script execution
 	 * @throws ScriptException 
+	 * @throws IllegalArgumentException if both file and script are null
 	 */
-	private Object runScript(final String script, final ImageData<BufferedImage> imageData) throws ScriptException {
-		return DefaultScriptEditor.executeScript(GroovyLanguage.getInstance(), script, getProject(), imageData, true, null);
-	}
-	
-	/**
-	 * Convenience method to execute a Groovy from a file.
-	 * The file will be reloaded each time it is required.
-	 * @param file File containing the script to run
-	 * @param imageData an {@link ImageData} object for the current image (may be null)
-	 * @return result of the script execution
-	 * @throws IOException 
-	 * @throws ScriptException 
-	 */
-	private Object runScript(final File file, final ImageData<BufferedImage> imageData) throws IOException, ScriptException {
-		var script = GeneralTools.readFileAsString(file.getAbsolutePath());
-		return runScript(script, imageData);
+	public Object runScript(final File file, final String script) throws ScriptException, IllegalArgumentException {
+		var params = ScriptParameters.builder()
+						.setProject(getProject())
+						.setImageData(getImageData())
+						.setDefaultImports(QPEx.getCoreClasses())
+						.setDefaultStaticImports(Collections.singletonList(QPEx.class))
+						.setFile(file)
+						.setScript(script)
+						.setBatchSaveResult(false)
+						.useLogWriters()
+						.build();
+		ScriptLanguage language = null;
+		if (file != null) {
+			language = ScriptLanguageProvider.fromString(file.getName());
+		}
+		if (!(language instanceof ExecutableLanguage))
+			language = GroovyLanguage.getInstance();
+		return ((ExecutableLanguage)language).execute(params);
 	}
 	
 	
@@ -3640,45 +3633,6 @@ public class QuPathGUI {
 		poolMultipleThreads.submit(runnable);
 	}
 	
-	
-	private Menu createRecentProjectsMenu() {
-		
-		// Create a recent projects list in the File menu
-		ObservableList<URI> recentProjects = PathPrefs.getRecentProjectList();
-		Menu menuRecent = MenuTools.createMenu("Recent projects...");
-		
-		EventHandler<Event> validationHandler = e -> {
-			menuRecent.getItems().clear();
-			for (URI uri : recentProjects) {
-				if (uri == null)
-					continue;
-				String name = Project.getNameFromURI(uri);
-				name = ".../" + name;
-				MenuItem item = new MenuItem(name);
-				item.setOnAction(e2 -> {
-					Project<BufferedImage> project;
-					try {
-						project = ProjectIO.loadProject(uri, BufferedImage.class);
-						setProject(project);
-					} catch (Exception e1) {
-						Dialogs.showErrorMessage("Project error", "Cannot find project " + uri);
-						logger.error("Error loading project", e1);
-					}
-				});
-				menuRecent.getItems().add(item);
-			}
-		};
-		
-		// Ensure the menu is populated
-		menuRecent.parentMenuProperty().addListener((v, o, n) -> {
-			if (o != null && o.getOnMenuValidation() == validationHandler)
-				o.setOnMenuValidation(null);
-			if (n != null)
-				n.setOnMenuValidation(validationHandler);
-		});
-		
-		return menuRecent;
-	}
 	
 	
 	
@@ -4069,6 +4023,14 @@ public class QuPathGUI {
 	}
 	
 	
+	/**
+	 * Set the control used to display log messages.
+	 * @param control
+	 */
+	public void setLogControl(final ScriptEditorControl<?> control) {
+		logViewerCommand.setLogControl(control);
+	}
+	
 	
 	/**
 	 * Repaint the viewer.  In the future, if multiple viewers are registered with the GUI 
@@ -4140,12 +4102,13 @@ public class QuPathGUI {
 	
 	
 	private void initializeAnalysisPanel() {
-		analysisPanel.setTabClosingPolicy(TabClosingPolicy.UNAVAILABLE);
+		analysisTabPane.setTabClosingPolicy(TabClosingPolicy.UNAVAILABLE);
+		analysisTabPane.setTabDragPolicy(TabDragPolicy.REORDER);
 		projectBrowser = new ProjectBrowser(this);
 
-		analysisPanel.getTabs().add(new Tab("Project", projectBrowser.getPane()));
+		analysisTabPane.getTabs().add(new Tab("Project", projectBrowser.getPane()));
 		ImageDetailsPane pathImageDetailsPanel = new ImageDetailsPane(this);
-		analysisPanel.getTabs().add(new Tab("Image", pathImageDetailsPanel.getPane()));
+		analysisTabPane.getTabs().add(new Tab("Image", pathImageDetailsPanel.getPane()));
 		
 		/*
 		 * Create tabs.
@@ -4156,76 +4119,82 @@ public class QuPathGUI {
 		 * TODO: Handle analysis pane being entirely hidden.
 		 */
 		
-		// Create a tab for annotations and one for the full object hierarchy
+		// Create a tab for annotations
 		var tabAnnotations = new Tab("Annotations");
 		SplitPane splitAnnotations = new SplitPane();
 		splitAnnotations.setOrientation(Orientation.VERTICAL);
 		var annotationPane = new AnnotationPane(this, imageDataProperty());
-		annotationPane.disableUpdatesProperty().bind(tabAnnotations.selectedProperty().not());		
-		splitAnnotations.getItems().add(annotationPane.getPane());
+		// Don't make updates if the tab isn't visible
+		var annotationTabVisible = Bindings.createBooleanBinding(() -> {
+			return tabAnnotations.getTabPane() == null || tabAnnotations.isSelected();
+		}, tabAnnotations.tabPaneProperty(), tabAnnotations.selectedProperty());
+		annotationPane.disableUpdatesProperty().bind(annotationTabVisible.not());
+		var tabAnnotationsMeasurements = createMeasurementsAndDescriptionsPane(annotationTabVisible);
+		splitAnnotations.getItems().addAll(annotationPane.getPane(), tabAnnotationsMeasurements);
 		tabAnnotations.setContent(splitAnnotations);
-		analysisPanel.getTabs().add(tabAnnotations);		
+		analysisTabPane.getTabs().add(tabAnnotations);		
 		
+		// Create a tab for the full hierarchy
 		var tabHierarchy = new Tab("Hierarchy");
 		final PathObjectHierarchyView paneHierarchy = new PathObjectHierarchyView(this, imageDataProperty());
-		paneHierarchy.disableUpdatesProperty().bind(tabHierarchy.selectedProperty().not());
+		var hierarchyTabVisible = Bindings.createBooleanBinding(() -> {
+			return tabHierarchy.getTabPane() == null || tabHierarchy.isSelected();
+		}, tabHierarchy.tabPaneProperty(), tabHierarchy.selectedProperty());
+		paneHierarchy.disableUpdatesProperty().bind(hierarchyTabVisible.not());
+		var tabHierarchyMeasurements = createMeasurementsAndDescriptionsPane(hierarchyTabVisible);
 		SplitPane splitHierarchy = new SplitPane();
 		splitHierarchy.setOrientation(Orientation.VERTICAL);
-		splitHierarchy.getItems().add(paneHierarchy.getPane());
+		splitHierarchy.getItems().addAll(paneHierarchy.getPane(), tabHierarchyMeasurements);
 		tabHierarchy.setContent(splitHierarchy);
-		analysisPanel.getTabs().add(tabHierarchy);
+		analysisTabPane.getTabs().add(tabHierarchy);
 		
-		// We want to show measurements/descriptions using the same component at the bottom, 
-		// switching its location if the tabs change
-		var tabpaneObjectsShared = new TabPane();
-		var objectMeasurementsTable = new SelectedMeasurementTableView(imageDataProperty());
-		tabpaneObjectsShared.setSide(Side.BOTTOM);
-		var tabSharedTable = new Tab("Measurements", objectMeasurementsTable.getTable());
-		tabpaneObjectsShared.getTabs().add(tabSharedTable);
-		var tabSharedDescription = new Tab("Description", ObjectDescriptionPane.createPane(imageDataProperty(), true));
-		tabpaneObjectsShared.getTabs().add(tabSharedDescription);
-		tabpaneObjectsShared.setTabClosingPolicy(TabClosingPolicy.UNAVAILABLE);
-
-		// We could try to avoid updating when not visible
-//		var annotationTabImageData = Bindings.createObjectBinding(() -> {
-//			return tabAnnotations.isSelected() ? imageDataProperty.get() : null;
-//		}, tabAnnotations.selectedProperty(), imageDataProperty());
-		
-		// We need to add somewhere, otherwise the tableview was slow to update
-		splitAnnotations.getItems().add(tabpaneObjectsShared);
-		
-		analysisPanel.getSelectionModel().selectedItemProperty().addListener((v, o, n) -> {
-			// Update split locations
-			if (o == tabAnnotations)
-				splitHierarchy.setDividerPosition(0, splitAnnotations.getDividerPositions()[0]);
-			else if (o == tabHierarchy) {
-				splitAnnotations.setDividerPosition(0, splitHierarchy.getDividerPositions()[0]);				
-			}
-			
-			// Update shared pane location
-			if (n == tabHierarchy) {
-				if (splitHierarchy.getItems().size() <= 1)
-					splitHierarchy.getItems().add(tabpaneObjectsShared);
-				else
-					splitHierarchy.getItems().set(1, tabpaneObjectsShared);
-			} else if (n == tabAnnotations) {
-				if (splitAnnotations.getItems().size() <= 1)
-					splitAnnotations.getItems().add(tabpaneObjectsShared);
-				else
-					splitAnnotations.getItems().set(1, tabpaneObjectsShared);
+		analysisTabPane.getSelectionModel().selectedItemProperty().addListener((v, o, n) -> {
+			// Update split locations if both tabs are in the tab pane
+			if (tabAnnotations.getTabPane() != null && tabHierarchy.getTabPane() != null) {
+				if (o == tabHierarchy) {
+					splitHierarchy.setDividerPosition(0, splitAnnotations.getDividerPositions()[0]);
+				} else if (o == tabAnnotations) {
+					splitAnnotations.setDividerPosition(0, splitHierarchy.getDividerPositions()[0]);				
+				}
 			}
 		});
-		
-		// Bind visibility to tab selection - this makes it possible to reduce expensive table updates
-		objectMeasurementsTable.getTable().visibleProperty().bind(tabSharedTable.selectedProperty());
-		
 		var commandLogView = new WorkflowCommandLogView(this);
 		TitledPane titledLog = new TitledPane("Command history", commandLogView.getPane());
 		titledLog.setCollapsible(false);
 		titledLog.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
 		var pane = new BorderPane(titledLog);
-		analysisPanel.getTabs().add(new Tab("Workflow", pane));
+		analysisTabPane.getTabs().add(new Tab("Workflow", pane));
+		
+		// Make the tabs undockable
+		for (var tab : analysisTabPane.getTabs()) {
+			GuiTools.makeTabUndockable(tab);
+		}
 	}
+	
+	/**
+	 * Make a tab pane to show either measurements or descriptions for the selected object.
+	 * Optionally provide a bindable value for visibility, since this can reduce expensive updates.
+	 * @param visible
+	 * @return
+	 */
+	private TabPane createMeasurementsAndDescriptionsPane(ObservableBooleanValue visible) {
+		var tabpaneObjectsShared = new TabPane();
+		var objectMeasurementsTable = new SelectedMeasurementTableView(imageDataProperty());
+		tabpaneObjectsShared.setSide(Side.BOTTOM);
+		var tabSharedTable = new Tab("Measurements", objectMeasurementsTable.getTable());
+		tabpaneObjectsShared.getTabs().add(tabSharedTable);
+		var descriptionPane = ObjectDescriptionPane.createPane(imageDataProperty(), true);
+		var tabSharedDescription = new Tab("Description", descriptionPane);
+		tabpaneObjectsShared.getTabs().add(tabSharedDescription);
+		tabpaneObjectsShared.setTabClosingPolicy(TabClosingPolicy.UNAVAILABLE);
+		
+		if (visible != null) {
+			objectMeasurementsTable.getTable().visibleProperty().bind(visible);
+			descriptionPane.visibleProperty().bind(visible);
+		}
+		return tabpaneObjectsShared;
+	}
+	
 	
 	
 	/**
@@ -4433,9 +4402,9 @@ public class QuPathGUI {
 				project.setPathClasses(getAvailablePathClasses());
 			} else {
 				// Update the available classes
-				if (!pathClasses.contains(PathClassFactory.getPathClassUnclassified())) {
+				if (!pathClasses.contains(PathClass.NULL_CLASS)) {
 					pathClasses = new ArrayList<>(pathClasses);
-					pathClasses.add(0, PathClassFactory.getPathClassUnclassified());
+					pathClasses.add(0, PathClass.NULL_CLASS);
 				}
 				getAvailablePathClasses().setAll(pathClasses);
 			}
@@ -4481,7 +4450,7 @@ public class QuPathGUI {
 		if (visible) {
 			if (analysisPanelVisible())
 				return;
-			splitPane.getItems().setAll(analysisPanel, mainViewerPane);
+			splitPane.getItems().setAll(analysisTabPane, mainViewerPane);
 			splitPane.setDividerPosition(0, lastDividerLocation);
 			pane.setCenter(splitPane);
 		} else {
@@ -4733,8 +4702,12 @@ public class QuPathGUI {
 			return (SplitPane)node;
 		}
 		
-		
-		public void removeViewerRow(final QuPathViewerPlus viewer) {
+		/**
+		 * Try to remove the row containing the specified viewer, notifying the user if this isn't possible.
+		 * @param viewer
+		 * @return true if the row was removed, false otherwise
+		 */
+		public boolean removeRow(final QuPathViewer viewer) {
 //			if (viewer.getServer() != null)
 //				System.err.println(viewer.getServer().getShortServerName());
 			// Note: These are the internal row numbers... these don't necessarily match with the displayed row (?)
@@ -4742,18 +4715,24 @@ public class QuPathGUI {
  			if (row < 0) {
 				// Shouldn't occur...
 				Dialogs.showErrorMessage("Multiview error", "Cannot find " + viewer + " in the grid!");
-				return;
+				return false;
 			}
+ 			if (splitPaneGrid.nRows() == 1) {
+				Dialogs.showErrorMessage("Close row error", "The last row can't be removed!");
+				return false;
+ 			}
+ 			
 			int nOpen = splitPaneGrid.countOpenViewersForRow(row);
 			if (nOpen > 0) {
 				Dialogs.showErrorMessage("Close row error", "Please close all open viewers in selected row, then try again");
 //				DisplayHelpers.showErrorMessage("Close row error", "Please close all open viewers in row " + row + ", then try again");
-				return;
+				return false;
 			}
 			splitPaneGrid.removeRow(row);
 			splitPaneGrid.resetGridSize();
 			// Make sure the viewer list is up-to-date
 			refreshViewerList();
+			return true;
 		}
 		
 		
@@ -4804,39 +4783,50 @@ public class QuPathGUI {
 		}
 		
 		
-		
-		public void removeViewerColumn(final QuPathViewerPlus viewer) {
+		/**
+		 * Try to remove the column containing the specified viewer, notifying the user if this isn't possible.
+		 * @param viewer
+		 * @return true if the column was removed, false otherwise
+		 */
+		public boolean removeColumn(final QuPathViewer viewer) {
 			int col = splitPaneGrid.getColumn(viewer.getView());
 			if (col < 0) {
 				// Shouldn't occur...
 				Dialogs.showErrorMessage("Multiview error", "Cannot find " + viewer + " in the grid!");
-				return;
+				return false;
 			}
+			
+ 			if (splitPaneGrid.nCols() == 1) {
+				Dialogs.showErrorMessage("Close row error", "The last row can't be removed!");
+				return false;
+ 			}
+			
 			int nOpen = splitPaneGrid.countOpenViewersForColumn(col);
 			if (nOpen > 0) {
 				Dialogs.showErrorMessage("Close column error", "Please close all open viewers in selected column, then try again");
 //				DisplayHelpers.showErrorMessage("Close column error", "Please close all open viewers in column " + col + ", then try again");
-				return;
+				return false;
 			}
 			splitPaneGrid.removeColumn(col);
 			splitPaneGrid.resetGridSize();
 			// Make sure the viewer list is up-to-date
 			refreshViewerList();
+			return true;
 		}
 		
 		
-		public void addRow(final QuPathViewerPlus viewer) {
+		public void addRow(final QuPathViewer viewer) {
 			splitViewer(viewer, false);
 			splitPaneGrid.resetGridSize();
 		}
 
-		public void addColumn(final QuPathViewerPlus viewer) {
+		public void addColumn(final QuPathViewer viewer) {
 			splitViewer(viewer, true);
 			splitPaneGrid.resetGridSize();
 		}
 
 		
-		public void splitViewer(final QuPathViewerPlus viewer, final boolean splitVertical) {
+		public void splitViewer(final QuPathViewer viewer, final boolean splitVertical) {
 			if (!viewers.contains(viewer))
 				return;
 			
@@ -4846,20 +4836,6 @@ public class QuPathGUI {
 				splitPaneGrid.addRow(splitPaneGrid.getRow(viewer.getView()));
 			}
 		}
-		
-		/**
-		 * Remove viewer from display
-		 * @param viewer
-		 * @return 
-		 */
-		public boolean removeViewer(QuPathViewer viewer) {
-			if (viewers.size() == 1) {
-				logger.error("Cannot remove last viewer!");
-				return false;
-			}
-			return true;
-		}
-		
 		
 		public void resetGridSize() {
 			splitPaneGrid.resetGridSize();
@@ -4933,10 +4909,21 @@ public class QuPathGUI {
 					if (!Double.isNaN(dr) && dr != 0)
 						v.setRotation(v.getRotation() + dr);
 					
-					// Shift as required
+					// Shift as required - correcting for rotation
 					double downsampleRatio = v.getDownsampleFactor() / downsample;
 					if (!Double.isNaN(dx) && !Double.isNaN(downsampleRatio)) {
-						v.setCenterPixelLocation(v.getCenterPixelX() + dx*downsampleRatio, v.getCenterPixelY() + dy*downsampleRatio);
+						
+						double rot = rotation - v.getRotation();
+						double sin = Math.sin(rot);
+						double cos = Math.cos(rot);
+						
+						double dx2 = dx * downsampleRatio;
+						double dy2 = dy * downsampleRatio;
+
+						double dx3 = cos * dx2 - sin * dy2;
+						double dy3 = sin * dx2 + cos * dy2;
+						
+						v.setCenterPixelLocation(v.getCenterPixelX() + dx3, v.getCenterPixelY() + dy3);
 					}
 				}
 			}
@@ -5066,16 +5053,14 @@ public class QuPathGUI {
 //			hierarchy.addPathObject(annotation, false);
 			
 //			// Make sure any core parent is set
-			hierarchy.addPathObjectBelowParent(coreNewParent, annotation, true);
+			hierarchy.addObjectBelowParent(coreNewParent, annotation, true);
 			
 			activeViewer.setSelectedObject(annotation);
 			return true;
 		}
 
 		@Override
-		public void viewerClosed(QuPathViewer viewer) {
-			removeViewer(viewer); // May be avoidable...?
-		}
+		public void viewerClosed(QuPathViewer viewer) {}
 
 		public QuPathViewerPlus getViewer() {
 			return getActiveViewer();

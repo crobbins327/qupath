@@ -68,8 +68,6 @@ import qupath.lib.objects.PathObjectTools;
 import qupath.lib.objects.PathTileObject;
 import qupath.lib.objects.TMACoreObject;
 import qupath.lib.objects.classes.PathClass;
-import qupath.lib.objects.classes.PathClassFactory;
-import qupath.lib.objects.classes.PathClassFactory.StandardPathClasses;
 import qupath.lib.objects.classes.PathClassTools;
 import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 import qupath.lib.objects.hierarchy.TMAGrid;
@@ -425,8 +423,8 @@ public class PathHierarchyPaintingHelper {
 						} else {
 							if ((overlayOptions.getFillAnnotations() &&
 									pathObject.isAnnotation() && 
-									pathObject.getPathClass() != PathClassFactory.getPathClass(StandardPathClasses.REGION) &&
-									(pathObject.getPathClass() != null || !pathObject.hasChildren()))
+									pathObject.getPathClass() != PathClass.StandardPathClasses.REGION &&
+									(pathObject.getPathClass() != null || !pathObject.hasChildObjects()))
 									|| (pathObject.isTMACore() && overlayOptions.getShowTMACoreLabels()))
 								paintROI(pathROI, g, colorStroke, stroke, ColorToolsAwt.getMoreTranslucentColor(colorStroke), downsample);
 							else
@@ -442,7 +440,7 @@ public class PathHierarchyPaintingHelper {
 			for (PathObject childObject : pathObject.getChildObjectsAsArray()) {
 				// Only call the painting method if required
 				ROI childROI = childObject.getROI();
-				if ((childROI != null && boundsDisplayed.intersects(childROI.getBoundsX(), childROI.getBoundsY(), childROI.getBoundsWidth(), childROI.getBoundsHeight())) || childObject.hasChildren())
+				if ((childROI != null && boundsDisplayed.intersects(childROI.getBoundsX(), childROI.getBoundsY(), childROI.getBoundsWidth(), childROI.getBoundsHeight())) || childObject.hasChildObjects())
 					painted = paintObject(childObject, paintChildren, g, boundsDisplayed, overlayOptions, selectionModel, downsample) | painted;
 			}
 		}
@@ -452,7 +450,7 @@ public class PathHierarchyPaintingHelper {
 	
 
 	private static void paintROI(ROI pathROI, Graphics2D g, Color colorStroke, Stroke stroke, Color colorFill, double downsample) {
-		if (pathROI == null)
+		if (pathROI == null || pathROI.isEmpty())
 			return;
 //		pathROI.draw(g, colorStroke, colorFill);
 		

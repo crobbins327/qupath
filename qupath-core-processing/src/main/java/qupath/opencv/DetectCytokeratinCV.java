@@ -53,8 +53,7 @@ import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.PixelCalibration;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjects;
-import qupath.lib.objects.classes.PathClassFactory;
-import qupath.lib.objects.classes.PathClassFactory.StandardPathClasses;
+import qupath.lib.objects.classes.PathClass;
 import qupath.lib.plugins.AbstractDetectionPlugin;
 import qupath.lib.plugins.DetectionPluginTools;
 import qupath.lib.plugins.ObjectDetector;
@@ -217,9 +216,9 @@ public class DetectCytokeratinCV extends AbstractDetectionPlugin<BufferedImage> 
 					areaTissue.intersect(areaROI);
 
 				if (!areaTissue.isEmpty()) {
-					ROI roiTissue = RoiTools.getShapeROI(areaTissue, request.getPlane());
+					ROI roiTissue = RoiTools.getShapeROI(areaTissue, request.getImagePlane());
 					roiTissue = ShapeSimplifier.simplifyShape(roiTissue, simplifyAmount);
-					pathObjects.add(PathObjects.createAnnotationObject(roiTissue, PathClassFactory.getPathClass(StandardPathClasses.STROMA)));
+					pathObjects.add(PathObjects.createAnnotationObject(roiTissue, PathClass.StandardPathClasses.STROMA));
 				}
 			}
 			if (areaDAB != null) {
@@ -228,9 +227,9 @@ public class DetectCytokeratinCV extends AbstractDetectionPlugin<BufferedImage> 
 					areaDAB.intersect(areaROI);
 
 				if (!areaDAB.isEmpty()) {
-					ROI roiDAB = RoiTools.getShapeROI(areaDAB, request.getPlane());
+					ROI roiDAB = RoiTools.getShapeROI(areaDAB, request.getImagePlane());
 					roiDAB = ShapeSimplifier.simplifyShape(roiDAB, simplifyAmount);
-					pathObjects.add(PathObjects.createAnnotationObject(roiDAB, PathClassFactory.getPathClass(StandardPathClasses.TUMOR)));
+					pathObjects.add(PathObjects.createAnnotationObject(roiDAB, PathClass.StandardPathClasses.TUMOR));
 				}
 			}
 

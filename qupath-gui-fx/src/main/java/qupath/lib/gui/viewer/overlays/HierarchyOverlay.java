@@ -168,14 +168,18 @@ public class HierarchyOverlay extends AbstractOverlay {
 			shapeRegion = AwtTools.getBounds(imageRegion);
 		var boundsDisplayed = shapeRegion.getBounds();
 		
+		// Note: the following was commented out for v0.4.0, because objects becoming invisible 
+		// when outside the image turned out to be problematic more than helpful
+		
 		// Ensure the bounds do not extend beyond what the server actually contains
-		boundsDisplayed = boundsDisplayed.intersection(serverBounds);
+//		boundsDisplayed = boundsDisplayed.intersection(serverBounds);
+		
 		if (boundsDisplayed.width <= 0 || boundsDisplayed.height <= 0)
 			return;
 
 		// Get the annotations & selected objects (which must be painted directly)
 		Collection<PathObject> selectedObjects = new ArrayList<>(hierarchy.getSelectionModel().getSelectedObjects());
-		selectedObjects.removeIf(p -> !p.hasROI() || (p.getROI().getZ() != z || p.getROI().getT() != t));
+		selectedObjects.removeIf(p -> p == null || !p.hasROI() || (p.getROI().getZ() != z || p.getROI().getT() != t));
 
 		ImageRegion region = AwtTools.getImageRegion(boundsDisplayed, z, t);
 		
@@ -206,7 +210,7 @@ public class HierarchyOverlay extends AbstractOverlay {
 									g2d,
 									imageData.isFluorescence() ? ColorToolsAwt.TRANSLUCENT_WHITE : ColorToolsAwt.TRANSLUCENT_BLACK,
 											downsampleFactor,
-											imageRegion.getPlane());
+											imageRegion.getImagePlane());
 				}
 				
 			} else {					

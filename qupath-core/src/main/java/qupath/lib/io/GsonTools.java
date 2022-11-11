@@ -2,7 +2,7 @@
  * #%L
  * This file is part of QuPath.
  * %%
- * Copyright (C) 2018 - 2020 QuPath developers, The University of Edinburgh
+ * Copyright (C) 2018 - 2022 QuPath developers, The University of Edinburgh
  * %%
  * QuPath is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -23,8 +23,8 @@ package qupath.lib.io;
 
 import java.awt.geom.AffineTransform;
 import java.io.IOException;
-import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -46,11 +46,12 @@ import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
 
 import qupath.lib.common.ColorTools;
-import qupath.lib.io.PathObjectTypeAdapters.FeatureCollection;
 import qupath.lib.measurements.MeasurementList;
 import qupath.lib.objects.PathObject;
+import qupath.lib.objects.PathRootObject;
 import qupath.lib.objects.classes.PathClass;
-import qupath.lib.objects.classes.PathClassFactory;
+import qupath.lib.objects.classes.PathClassTools;
+import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 import qupath.lib.regions.ImagePlane;
 import qupath.lib.roi.interfaces.ROI;
 
@@ -108,15 +109,25 @@ public class GsonTools {
 		
 		@SuppressWarnings("unchecked")
 		static <T> TypeAdapter<T> getTypeAdaptor(Class<T> cls) {
+			// No point serializing the root object alone - serialize the whole hierarchy instead
+			if (PathRootObject.class.isAssignableFrom(cls))
+				return (TypeAdapter<T>)QuPathTypeAdapters.PathObjectTypeAdapter.INSTANCE_HIERARCHY;
+			
 			if (PathObject.class.isAssignableFrom(cls))
-				return (TypeAdapter<T>)PathObjectTypeAdapters.PathObjectTypeAdapter.INSTANCE;
+				return (TypeAdapter<T>)QuPathTypeAdapters.PathObjectTypeAdapter.INSTANCE;
 
 			if (MeasurementList.class.isAssignableFrom(cls))
-				return (TypeAdapter<T>)PathObjectTypeAdapters.MeasurementListTypeAdapter.INSTANCE;
+				return (TypeAdapter<T>)QuPathTypeAdapters.MeasurementListTypeAdapter.INSTANCE;
+
+//			if (HierarchyFeatureCollection.class.isAssignableFrom(cls))
+//				return (TypeAdapter<T>)PathObjectTypeAdapters.PathObjectCollectionTypeAdapter.INSTANCE_HIERARCHY;
 
 			if (FeatureCollection.class.isAssignableFrom(cls))
-				return (TypeAdapter<T>)PathObjectTypeAdapters.PathObjectCollectionTypeAdapter.INSTANCE;
-			
+				return (TypeAdapter<T>)QuPathTypeAdapters.PathObjectCollectionTypeAdapter.INSTANCE;
+
+			if (PathObjectHierarchy.class.isAssignableFrom(cls))
+				return (TypeAdapter<T>)QuPathTypeAdapters.HierarchyTypeAdapter.INSTANCE;
+
 			if (ROI.class.isAssignableFrom(cls))
 				return (TypeAdapter<T>)ROITypeAdapters.ROI_ADAPTER_INSTANCE;
 						
@@ -303,16 +314,6 @@ public class GsonTools {
 	
 	
 	/**
-	 * Wrap a collection of PathObjects as a FeatureCollection. The purpose of this is to enable 
-	 * exporting a GeoJSON FeatureCollection that may be reused in other software.
-	 * @param pathObjects
-	 * @return
-	 */
-	public static FeatureCollection wrapFeatureCollection(Collection<? extends PathObject> pathObjects) {
-		return new FeatureCollection(pathObjects);
-	}
-	
-	/**
 	 * Get default Gson, capable of serializing/deserializing some key QuPath classes.
 	 * @return
 	 * 
@@ -349,15 +350,52 @@ public class GsonTools {
 		@Override
 		public void write(JsonWriter out, PathClass value) throws IOException {
 			// Use a proxy object for easier use elsewhere
-			if (value == null || value == PathClassFactory.getPathClassUnclassified()) {
+			if (value == null || value == PathClass.NULL_CLASS) {
 				// Write in the default way
 				gson.toJson(value, PathClass.class, out);				
 			} else {
-				// Write in a simplified way, with toString() and an array of RGB values
-				var proxy = new PathClassProxy();
-				proxy.name = value.toString();
-				proxy.color = rgbToArray(value.getColor());
-				gson.toJson(proxy, PathClassProxy.class, out);	
+				out.beginObject();
+				var names = PathClassTools.splitNames(value);
+				if (names.size() == 1) {
+					out.name("name");
+					out.value(names.get(0));
+				} else {
+					out.name("names");
+					out.beginArray();
+					for (var name : names)
+						out.value(name);					
+					out.endArray();
+				}
+				var color = value.getColor();
+				if (color != null) {
+					out.name("color");
+					var alpha = ColorTools.alpha(color);
+					try {
+						if (alpha != 0 && alpha != 255)
+							out.jsonValue(String.format("[%d, %d, %d, %d]", ColorTools.red(color), ColorTools.green(color), ColorTools.blue(color), ColorTools.alpha(color)));
+						else
+							out.jsonValue(String.format("[%d, %d, %d]", ColorTools.red(color), ColorTools.green(color), ColorTools.blue(color)));
+					} catch (UnsupportedOperationException e) {
+						// TODO: Consider not trying to write json value, since it isn't always supported
+						out.beginArray();
+						out.value(ColorTools.red(color));
+						out.value(ColorTools.green(color));
+						out.value(ColorTools.blue(color));
+						if (alpha != 0 && alpha != 255)
+							ColorTools.alpha(color);
+						out.endArray();
+					}
+				}
+				out.endObject();
+				
+//				// Write in a simplified way, with toString() and an array of RGB values
+//				var proxy = new PathClassProxy();
+//				if (names.size() == 1)
+//					proxy.name = names.get(0);
+//				else
+//					proxy.names = names;
+//				proxy.color = rgbToArray(value.getColor());
+//				gson.toJson(proxy, PathClassProxy.class, out);	
 			}
 		}
 
@@ -372,25 +410,24 @@ public class GsonTools {
 			
 			// Accept a classification just from a string (i.e. no color specified)
 			if (token == JsonToken.STRING)
-				return PathClassFactory.getPathClass(in.nextString());
+				return PathClass.fromString(in.nextString());
 			
 			// Handle objects
 			if (token == JsonToken.BEGIN_OBJECT) {
 				JsonObject pathClassObject = gson.fromJson(in, JsonObject.class);	
 				// Check if we have just serialized in the default way (with the usual private field name for color)
-				// This also should be used with PathClassFactory.getPathClassUnclassified() (which has an empty object)
+				// This also should be used with PathClass.NULL_CLASS (which has an empty object)
+				// (It was the method used before v0.4.0)
 				if (pathClassObject.size() == 0 || pathClassObject.has("colorRGB") || pathClassObject.has("parentClass")) {
 					// Read in the default way, then replace with a singleton instance
 					PathClass pathClass = gson.fromJson(pathClassObject, PathClass.class);
-					return PathClassFactory.getSingletonPathClass(pathClass);					
+					return PathClass.getSingleton(pathClass);					
 				}
-				
 				// Check if we have a proxy object
-				if (pathClassObject.has("name")) {
+				if ((pathClassObject.has("name") || pathClassObject.has("names")) && pathClassObject.has("color")) {
 					PathClassProxy proxy = gson.fromJson(pathClassObject, PathClassProxy.class);
 					return proxy.getPathClass();
 				}
-				
 			}
 			throw new JsonParseException("Unable to parse PathClass from " + in);
 		}
@@ -398,14 +435,18 @@ public class GsonTools {
 		
 		private static class PathClassProxy {
 			
+			private List<String> names;
 			private String name;
 			private int[] color;
 			
 			private PathClass getPathClass() {
-				if (name == null)
-					return null;
-				Integer rgb = arrayToRgb(color);
-				return PathClassFactory.getPathClass(name, rgb);
+				Integer rgb = color == null ? null : arrayToRgb(color);
+				if (name == null) {
+					if (names == null || names.isEmpty())
+						return null;
+					return PathClass.fromCollection(names, rgb);
+				}
+				return PathClass.fromString(name, rgb);
 			}
 			
 		}
@@ -414,21 +455,21 @@ public class GsonTools {
 	}
 	
 	
-	/**
-	 * Convert packed RGB value to an array
-	 * @param rgb
-	 * @return
-	 */
-	private static int[] rgbToArray(Integer rgb) {
-		if (rgb == null)
-			return new int[0];
-		else
-			return new int[] {
-				ColorTools.red(rgb.intValue()),
-				ColorTools.green(rgb.intValue()),
-				ColorTools.blue(rgb.intValue())
-			};
-	}
+//	/**
+//	 * Convert packed RGB value to an array
+//	 * @param rgb
+//	 * @return
+//	 */
+//	private static int[] rgbToArray(Integer rgb) {
+//		if (rgb == null)
+//			return new int[0];
+//		else
+//			return new int[] {
+//				ColorTools.red(rgb.intValue()),
+//				ColorTools.green(rgb.intValue()),
+//				ColorTools.blue(rgb.intValue())
+//			};
+//	}
 	
 	/**
 	 * Convert array to a packed RGB value
@@ -438,9 +479,14 @@ public class GsonTools {
 	private static Integer arrayToRgb(int[] rgb) {
 		if (rgb == null || rgb.length == 0)
 			return null;
-		if (rgb.length < 3)
+		if (rgb.length == 1)
 			return rgb[0];
-		return ColorTools.packRGB(rgb[0], rgb[1], rgb[2]);
+		if (rgb.length == 3)
+			return ColorTools.packRGB(rgb[0], rgb[1], rgb[2]);
+		if (rgb.length == 4)
+			// Alpha last in the array!
+			return ColorTools.packARGB(rgb[3], rgb[0], rgb[1], rgb[2]);
+		throw new IllegalArgumentException("RGB array should have length 0, 1, 3 or 4 - not " + rgb.length);
 	}
 	
 	

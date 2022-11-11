@@ -45,7 +45,6 @@ import javafx.scene.chart.ScatterChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.chart.XYChart.Data;
 import javafx.scene.chart.XYChart.Series;
-import javafx.scene.control.Tooltip;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
@@ -644,8 +643,8 @@ public class Charts {
 			return series(
 					null,
 					pathObjects,
-					(PathObject p) -> p.getMeasurementList().getMeasurementValue(xMeasurement),
-					(PathObject p) -> p.getMeasurementList().getMeasurementValue(yMeasurement));
+					(PathObject p) -> p.getMeasurementList().get(xMeasurement),
+					(PathObject p) -> p.getMeasurementList().get(yMeasurement));
 		}
 		
 		/**

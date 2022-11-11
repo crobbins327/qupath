@@ -1,50 +1,84 @@
+/*
+ * Basic styles for richtextfx
+ */
+
+.code-area {
+	-fx-background-color: -qp-script-background-color;
+	-fx-text-fill: -qp-script-text-color;
+}
+
+.caret {
+    -fx-stroke: -qp-script-text-color;
+}
+
 .text {
 	-fx-fill: -qp-script-text-color;
 }
+
 .lineno {
-	-fx-background-color: -qp-script-background-color;
+	-fx-background-color: -fx-background;
 }
+
+
+/*
+ * Logging styles
+ */
+
+.debug {
+    -fx-fill: -qp-script-debug-color;
+}
+.trace {
+    -fx-fill: -qp-script-trace-color;
+}
+.error {
+    -fx-fill: -qp-script-error-color;
+}
+.warn {
+    -fx-fill: -qp-script-warn-color;
+}
+.info {
+    -fx-fill: -qp-script-info-color;
+}
+
+
+/*
+ * Coding styles
+ */
+ 
 .keyword {
     -fx-fill: -qp-script-keyword-color;
-    -fx-font-weight: bold;
-}
-.method {
-    -fx-font-weight: bold;
+	-fx-font-weight: bold;
 }
 .paren {
+    -fx-fill: -qp-script-paren-color;
     -fx-font-weight: bold;
 }
 .bracket {
+    -fx-fill: -qp-script-bracket-color;
     -fx-font-weight: bold;
 }
 .brace {
+    -fx-fill: -qp-script-brace-color;
     -fx-font-weight: bold;
 }
 .string {
     -fx-fill: -qp-script-string-color;
 }
+.number {
+    -fx-fill: -qp-script-number-color;
+}
 .comment {
     -fx-fill: -qp-script-comment-color;
 }
-.error {
-    -fx-fill: -qp-script-error-color;
-}
-.warning {
-    -fx-fill: -qp-script-warning-color;
-}
 .semicolon {
+    -fx-fill: -qp-script-semicolon-color;
     -fx-font-weight: bold;
 }
 
 
-.remaining {
-    -fx-fill: -qp-script-tag-color;
-}
-.caret {
-    -fx-stroke: -qp-script-text-color;
-}
-
-
+/*
+ * Markdown styles
+ */
 .md {
     -fx-fill: -qp-script-text-color;
     -fx-font-family: sans-serif;
@@ -98,6 +132,10 @@
 	-fx-fill: -qp-script-error-color;
 }
 
+
+/*
+ * XML styles
+ */ 
 .xml.body {
 	-fx-fill: -qp-script-text-color;
 }

@@ -262,14 +262,57 @@ public class PathPrefs {
 	}
 
 	
-	private static BooleanProperty doAutoUpdateCheck = createPersistentPreference("doAutoUpdateCheck", Boolean.TRUE);
+	/**
+	 * Options for automatic updating checking of QuPath and/or extensions.
+	 */
+	public static enum AutoUpdateType {
+		/**
+		 * Check for QuPath updates only
+		 */
+		QUPATH_ONLY,
+		
+		/**
+		 * Check for QuPath and extensions on GitHub
+		 */
+		QUPATH_AND_EXTENSIONS,
+		
+		/**
+		 * Check for extensions on GitHub only (not new QuPath releases)
+		 */
+		EXTENSIONS_ONLY,
+		
+		/**
+		 * Don't check for any updates automatically
+		 */
+		NONE;
+		
+		@Override
+		public String toString() {
+			switch(this) {
+			case EXTENSIONS_ONLY:
+				return "Extensions only";
+			case NONE:
+				return "None";
+			case QUPATH_AND_EXTENSIONS:
+				return "QuPath + extensions";
+			case QUPATH_ONLY:
+				return "QuPath only";
+			default:
+				return super.toString();
+			}
+		}
+		
+	}
+	
+	
+	private static ObjectProperty<AutoUpdateType> autoUpdateCheck = createPersistentPreference("autoUpdateCheck", AutoUpdateType.QUPATH_AND_EXTENSIONS, AutoUpdateType.class);
 	
 	/**
 	 * Check for updates when launching QuPath, if possible.
 	 * @return
 	 */
-	public static BooleanProperty doAutoUpdateCheckProperty() {
-		return doAutoUpdateCheck;
+	public static ObjectProperty<AutoUpdateType> autoUpdateCheckProperty() {
+		return autoUpdateCheck;
 	}
 
 	
@@ -333,6 +376,20 @@ public class PathPrefs {
 			defaultLocaleDisplay.set(Locale.getDefault(Category.DISPLAY));
 		});
 	}
+	
+	
+	
+	private static BooleanProperty showStartupMessage = createPersistentPreference("showStartupMessage", true);
+	
+	
+	/**
+	 * Show a startup message when QuPath is launched.
+	 * @return
+	 */
+	public static BooleanProperty showStartupMessageProperty() {
+		return showStartupMessage;
+	}
+	
 	
 		
 	private static IntegerProperty maxMemoryMB;
@@ -418,7 +475,7 @@ public class PathPrefs {
 					// With jpackage 15+, this should work
 					String memory = "java-options=-Xmx" + n.intValue() + "M";
 					Path config = getConfigPath();
-					if (!Files.exists(config)) {
+					if (config == null || !Files.exists(config)) {
 						logger.error("Cannot find config file!");
 						return;
 					}
@@ -839,6 +896,46 @@ public class PathPrefs {
 	}
 	
 	
+	
+	private static int nRecentScripts = 8;
+	private static ObservableList<URI> recentScripts = FXCollections.observableArrayList();
+	
+	static {
+		// Try to load the recent scripts
+		for (int i = 0; i < nRecentScripts; i++) {
+			String project = getUserPreferences().get("recentScript" + i, null);
+			if (project == null || project.length() == 0)
+				break;
+			try {
+				recentScripts.add(GeneralTools.toURI(project));
+			} catch (URISyntaxException e) {
+				logger.warn("Unable to parse URI from " + project, e);
+			}
+		}
+		// Add a listener to keep storing the preferences, as required
+		recentScripts.addListener((Change<? extends URI> c) -> {
+			int i = 0;
+			for (URI project : recentScripts) {
+				getUserPreferences().put("recentScript" + i, project.toString());
+				i++;
+			}
+			while (i < nRecentScripts) {
+				getUserPreferences().put("recentScript" + i, "");
+				i++;
+			}
+		});
+	}
+	
+	/**
+	 * Get a list of the most recent scripts that were opened.
+	 * @return
+	 */
+	public static ObservableList<URI> getRecentScriptsList() {
+		return recentScripts;
+	}
+	
+	
+	
 	private static BooleanProperty invertScrolling = createPersistentPreference("invertScrolling", !GeneralTools.isMac());
 	
 	/**
@@ -1029,6 +1126,16 @@ public class PathPrefs {
 	 */
 	public static BooleanProperty showMeasurementTableThumbnailsProperty() {
 		return showMeasurementTableThumbnailsProperty;
+	}
+	
+	private static BooleanProperty showMeasurementTableObjectIDsProperty = PathPrefs.createPersistentPreference("showMeasurementTableObjectIDsProperty", true);
+	
+	/**
+	 * Specify whether measurement tables should show object IDs by default or not.
+	 * @return
+	 */
+	public static BooleanProperty showMeasurementTableObjectIDsProperty() {
+		return showMeasurementTableObjectIDsProperty;
 	}
 	
 	private static BooleanProperty enableFreehandTools = createPersistentPreference("enableFreehandTools", true);
@@ -1351,6 +1458,21 @@ public class PathPrefs {
 	public static ObjectProperty<DetectionTreeDisplayModes> detectionTreeDisplayModeProperty() {
 		return detectionTreeDisplayMode;
 	}
+	
+	
+	
+	private static IntegerProperty maxObjectsToClipboard = PathPrefs.createPersistentPreference("maxObjectsToClipboard", 5_000);
+
+	/**
+	 * The maximum number of objects that can be copied to the system clipboard.
+	 * This is to avoid accidentally putting very large amounts of data on the clipboard (causing the app to slow down or freeze), 
+	 * or attempting to create strings that are too long.
+	 * @return
+	 */
+	public static IntegerProperty maxObjectsToClipboardProperty() {
+		return maxObjectsToClipboard;
+	}
+	
 	
 	
 	/**

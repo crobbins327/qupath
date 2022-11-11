@@ -26,8 +26,6 @@ package qupath.lib.gui.viewer;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -52,9 +50,9 @@ import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.commands.InteractiveObjectImporter;
 import qupath.lib.gui.commands.ProjectCommands;
 import qupath.lib.gui.dialogs.Dialogs;
-import qupath.lib.gui.dialogs.Dialogs.DialogButton;
 import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.gui.scripting.ScriptEditor;
 import qupath.lib.gui.tma.TMADataIO;
@@ -306,22 +304,19 @@ public class DragDropImportListener implements EventHandler<DragEvent> {
 		// Some consumers can only handle one file
 		boolean singleFile = list.size() == 1;
 		
-		// Gather together the extensions - if this has length one, we know all the files have the same extension
-		Set<String> allExtensions = list.stream().map(f -> GeneralTools.getExtension(f).orElse("")).collect(Collectors.toSet());
+//		// Gather together the extensions - if this has length one, we know all the files have the same extension
+//		Set<String> allExtensions = list.stream().map(f -> GeneralTools.getExtension(f).orElse("")).collect(Collectors.toSet());
 		
 		// If we have a zipped file, create a set that includes the files within the zip image
 		// This helps us determine whether or not a zip file contains an image or objects, for example
-		Set<String> allUnzippedExtensions = allExtensions;
-		if (allExtensions.contains(".zip")) {
-			allUnzippedExtensions = list.stream().flatMap(f -> {
-				try {
-					return PathIO.unzippedExtensions(f.toPath()).stream();
-				} catch (IOException e) {
-					logger.debug(e.getLocalizedMessage(), e);
-					return Arrays.stream(new String[0]);
-				}
-			}).collect(Collectors.toSet());
-		}
+		Set<String> allUnzippedExtensions = list.stream().flatMap(f -> {
+			try {
+				return PathIO.unzippedExtensions(f.toPath()).stream();
+			} catch (IOException e) {
+				logger.debug(e.getLocalizedMessage(), e);
+				return Arrays.stream(new String[0]);
+			}
+		}).collect(Collectors.toSet());
 		
 		// Extract the first (and possibly only) file
 		File file = list.get(0);
@@ -353,8 +348,7 @@ public class DragDropImportListener implements EventHandler<DragEvent> {
 					if (choice == ButtonType.CANCEL)
 						return;
 					if (choice == btImport) {
-						var pathObjects = PathIO.readObjects(file);
-						hierarchy.addPathObjects(pathObjects);
+						InteractiveObjectImporter.promptToImportObjectsFromFile(imageData, file);
 						return;
 					}
 				}
@@ -373,6 +367,7 @@ public class DragDropImportListener implements EventHandler<DragEvent> {
 					f.getAbsolutePath().toLowerCase().endsWith(ProjectIO.getProjectExtension())).collect(Collectors.toList());
 			if (projectFiles.size() == 1) {
 				file = projectFiles.get(0);
+				fileName = file.getName().toLowerCase();
 				logger.warn("Selecting project file {}", file);
 			} else if (projectFiles.size() > 1) {
 				// Prompt to select which project file to open
@@ -382,6 +377,7 @@ public class DragDropImportListener implements EventHandler<DragEvent> {
 				if (selectedName == null)
 					return;
 				file = new File(file, selectedName);
+				fileName = file.getName().toLowerCase();
 			} else if (filesInDirectory.length == 0) {
 				// If we have an empty directory, offer to set it as a project
 				if (Dialogs.showYesNoDialog("Create project", "Create project for empty directory?")) {
@@ -417,40 +413,7 @@ public class DragDropImportListener implements EventHandler<DragEvent> {
 //				Dialogs.showErrorMessage("Open object file", "Please open an image first to import objects!");
 				return;
 			}
-			
-			List<PathObject> pathObjects = new ArrayList<>();
-			List<WorkflowStep> steps = new ArrayList<>();
-			for (var tempFile : list) {
-				try {
-					var tempObjects = PathIO.readObjects(tempFile);
-					if (tempObjects.isEmpty()) {
-						logger.warn("No objects found in {}, opening the dragged file in the Script Editor instead", tempFile.getAbsolutePath());
-						qupath.getScriptEditor().showScript(file);
-						return;
-					}
-					pathObjects.addAll(tempObjects);
-					
-					// Add step to workflow
-					Map<String, String> map = new HashMap<>();
-					map.put("path", file.getPath());
-					String method = "Import objects";
-					String methodString = String.format("%s(%s%s%s)", "importObjectsFromFile", "\"", GeneralTools.escapeFilePath(tempFile.getPath()), "\"");
-					steps.add(new DefaultScriptableWorkflowStep(method, map, methodString));
-				} catch (IOException | IllegalArgumentException e) {
-					Dialogs.showErrorNotification("Object import", e.getLocalizedMessage());
-					return;
-				}
-			}
-			// Ask confirmation to user
-			int nObjects = pathObjects.size();
-			String message = nObjects == 1 ? "Add object to the hierarchy?" : String.format("Add %d objects to the hierarchy?", nObjects);
-			var confirm = Dialogs.showConfirmDialog("Add to hierarchy", message);
-			if (!confirm)
-				return;
-			
-			// Add objects to hierarchy
-			hierarchy.addPathObjects(pathObjects);
-			imageData.getHistoryWorkflow().addSteps(steps);
+			InteractiveObjectImporter.promptToImportObjectsFromFile(imageData, file);
 			return;
 		}
 		

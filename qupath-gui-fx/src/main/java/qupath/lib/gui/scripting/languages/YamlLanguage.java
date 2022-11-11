@@ -23,6 +23,9 @@ package qupath.lib.gui.scripting.languages;
 
 import java.util.ServiceLoader;
 
+import qupath.lib.scripting.languages.ScriptAutoCompletor;
+import qupath.lib.scripting.languages.ScriptLanguage;
+
 /**
  * Class for the representation of YAML syntax in QuPath.
  * 
@@ -36,8 +39,7 @@ public class YamlLanguage extends ScriptLanguage {
 	 */
 	private static YamlLanguage INSTANCE;
 	
-	private ScriptSyntax syntax;
-	private ScriptAutoCompletor completor;
+	private ScriptAutoCompletor completor = null;
 	
 	/**
 	 * Constructor for YAML language. This constructor should never be 
@@ -46,10 +48,7 @@ public class YamlLanguage extends ScriptLanguage {
 	 * Note: this has to be public for the {@link ServiceLoader} to work.
 	 */
 	public YamlLanguage() {
-		super("YAML", new String[]{".yaml"});
-		this.syntax = YamlSyntax.getInstance();
-		this.completor = new PlainAutoCompletor();
-		
+		super("YAML", ".yaml");
 		if (INSTANCE != null)
 			throw new UnsupportedOperationException("Language classes cannot be instantiated more than once!");
 		
@@ -65,11 +64,6 @@ public class YamlLanguage extends ScriptLanguage {
 		return INSTANCE;
 	}
 	
-	@Override
-	public ScriptSyntax getSyntax() {
-		return syntax;
-	}
-
 	@Override
 	public ScriptAutoCompletor getAutoCompletor() {
 		return completor;
