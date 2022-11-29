@@ -43,9 +43,9 @@ import java.awt.image.BufferedImage;
 import java.awt.image.ColorConvertOp;
 import java.awt.image.LookupOp;
 import java.awt.image.ByteLookupTable;
-import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -2227,7 +2227,7 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 		var uris = server == null ? null : server.getURIs();
 		if (uris == null || uris.isEmpty())
 			return null;
-		ICC_Profile iccSource = readICC(new File(uris.iterator().next()));
+		ICC_Profile iccSource = readICC(Paths.get(uris.iterator().next()).toFile());
 		if (iccSource == null)
 			return null;
 		return new ColorConvertOp(new ICC_Profile[]{
@@ -2738,8 +2738,8 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 				if (imgThumbnail != null) {
 					img = imgThumbnail;
 					double downsample = (double)server.getWidth() / imgThumbnail.getWidth();
-					xi = (int)(xx / downsample + .5);
-					yi = (int)(yy / downsample + .5);
+					xi = (int)(xx / downsample);
+					yi = (int)(yy / downsample);
 				}
 			} else {
 				xi = (int)((xx - request.getX())/request.getDownsample());

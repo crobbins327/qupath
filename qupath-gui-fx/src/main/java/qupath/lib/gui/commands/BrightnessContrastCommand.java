@@ -348,6 +348,7 @@ public class BrightnessContrastCommand implements Runnable, ChangeListener<Image
 				}
 				sliderMin.setValue(sliderMin.getMin());
 				sliderMax.setValue(sliderMax.getMax());
+				sliderGamma.setValue(1.0);
 		});
 		
 		Stage dialog = new Stage();
@@ -356,7 +357,9 @@ public class BrightnessContrastCommand implements Runnable, ChangeListener<Image
 		
 		// Create color/channel display table
 		table = new TableView<>(imageDisplay == null ? FXCollections.observableArrayList() : imageDisplay.availableChannels());
-		table.setPlaceholder(new Text("No channels available"));
+		var textPlaceholder = new Text("No channels available");
+		textPlaceholder.setStyle("-fx-fill: -fx-text-base-color;");
+		table.setPlaceholder(textPlaceholder);
 		table.addEventHandler(KeyEvent.KEY_PRESSED, new CopyTableListener());
 		
 		table.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
@@ -897,9 +900,8 @@ public class BrightnessContrastCommand implements Runnable, ChangeListener<Image
 		sliderMax.setDisable(false);
 		
 		chartWrapper.getThresholds().clear();
-		Color color = Color.rgb(0, 0, 0, 0.2);
-		chartWrapper.addThreshold(sliderMin.valueProperty(), color);
-		chartWrapper.addThreshold(sliderMax.valueProperty(), color);
+		chartWrapper.addThreshold(sliderMin.valueProperty());
+		chartWrapper.addThreshold(sliderMax.valueProperty());
 		chartWrapper.setIsInteractive(true);
 //		chartWrapper.getThresholds().setAll(sliderMin.valueProperty(), sliderMax.valueProperty());
 		

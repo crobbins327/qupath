@@ -64,6 +64,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ObjectArrays;
 
+import qupath.bioimageio.spec.BioimageIoSpec;
 import qupath.imagej.tools.IJTools;
 import qupath.lib.analysis.DelaunayTools;
 import qupath.lib.analysis.DistanceTools;
@@ -134,8 +135,11 @@ import qupath.lib.roi.GeometryTools;
 import qupath.lib.roi.ROIs;
 import qupath.lib.roi.RoiTools;
 import qupath.lib.roi.interfaces.ROI;
+import qupath.opencv.dnn.DnnModelParams;
+import qupath.opencv.dnn.DnnModels;
 import qupath.opencv.dnn.DnnTools;
 import qupath.opencv.io.OpenCVTypeAdapters;
+import qupath.opencv.ml.BioimageIoTools;
 import qupath.opencv.ml.objects.OpenCVMLClassifier;
 import qupath.opencv.ml.objects.features.FeatureExtractors;
 import qupath.opencv.ml.pixel.PixelClassifierTools;
@@ -143,6 +147,7 @@ import qupath.opencv.ml.pixel.PixelClassifierTools.CreateObjectOptions;
 import qupath.opencv.ml.pixel.PixelClassifiers;
 import qupath.opencv.ops.ImageOps;
 import qupath.opencv.tools.GroovyCV;
+import qupath.opencv.tools.NumpyTools;
 import qupath.opencv.tools.OpenCVTools;
 
 /**
@@ -294,11 +299,17 @@ public class QP {
 			GeometryTools.class,
 			IJTools.class,
 			OpenCVTools.class,
+			NumpyTools.class,
 			DnnTools.class,
+			DnnModels.class,
+			DnnModelParams.class,
 			TileExporter.class,
 			LabeledImageServer.class,
 			ServerTools.class,
 			PixelClassifierTools.class,
+			
+			BioimageIoSpec.class,
+			BioimageIoTools.class,
 			
 			DensityMaps.class,
 			ColorTransforms.class,

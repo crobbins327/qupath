@@ -47,6 +47,8 @@ import java.util.stream.Collectors;
 import org.bytedeco.opencv.global.opencv_core;
 import org.bytedeco.opencv.global.opencv_imgproc;
 import org.apache.commons.math3.stat.descriptive.rank.Percentile;
+import org.apache.commons.math3.stat.descriptive.rank.Percentile.EstimationType;
+import org.apache.commons.math3.stat.ranking.NaNStrategy;
 import org.bytedeco.javacpp.IntPointer;
 import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.PointerScope;
@@ -83,9 +85,11 @@ import qupath.lib.analysis.images.SimpleImages;
 import qupath.lib.color.ColorModelFactory;
 import qupath.lib.common.ColorTools;
 import qupath.lib.common.GeneralTools;
+import qupath.lib.common.ThreadTools;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.PixelType;
 import qupath.lib.objects.PathObject;
+import qupath.lib.regions.Padding;
 import qupath.lib.regions.RegionRequest;
 import qupath.lib.roi.interfaces.ROI;
 
@@ -923,23 +927,61 @@ public class OpenCVTools {
 	}
 	
 	/**
+	 * Create a {@link Percentile} instance with default configuration.
+	 * <p>
+	 * This uses {@link EstimationType#R_7} as the estimation type, 
+	 * because this corresponds to the default ('linear') method used 
+	 * within NumPy.
+	 * <p>
+	 * See the <a href="https://numpy.org/doc/stable/reference/generated/numpy.percentile.html">NumPy docs</a>  
+	 * and also <a href="https://commons.apache.org/proper/commons-math/javadocs/api-3.6.1/org/apache/commons/math3/stat/descriptive/rank/Percentile.EstimationType.html">
+	 * Apache Commons Math</a>.
+	 * 
+	 * @return
+	 */
+	static Percentile createPercentile() {
+		return new Percentile()
+				.withEstimationType(EstimationType.R_7)
+				.withNaNStrategy(NaNStrategy.REMOVED);
+	}
+	
+	
+	/**
 	 * Get percentile values for all pixels in a Mat, ignoring NaNs.
+	 * <p>
+	 * Note that the behavior of this method was changed for v0.4.0 to
+	 * match NumPy's 'linear' method to calculate percentiles 
+	 * (which is NumPy's current default at the time of writing).
+	 * 
 	 * @param mat
-	 * @param percentiles requested percentiles, {@code 0 < percentile <= 100}
+	 * @param percentiles requested percentiles (must be between 0 and 100)
 	 * @return percentile values, in the same order as the input percentiles
+	 * 
+	 * @implSpec here, providing 0 or 100 should return the minimum or maximum respectively.
+	 * @implNote this was rewritten for improved performance in v0.4.0
 	 */
 	public static double[] percentiles(Mat mat, double... percentiles) {
+		boolean doParallel = OpenCVTools.totalPixels(mat) > 1_000_000 && ThreadTools.getParallelism() > 2;
+		// Sorting will almost certainly hurt performance unless parallel & we need multiple percentiles
+		boolean doSort = doParallel && percentiles.length > 5;
+		return percentilesStream(mat, doParallel, doSort, percentiles);
+	}
+	
+	/**
+	 * Legacy percentiles method before v0.4.0 (slower)
+	 * @param mat
+	 * @param percentiles
+	 * @return
+	 */
+	static double[] percentilesSorted(Mat mat, double... percentiles) {
 		double[] result = new double[percentiles.length];
 		if (result.length == 0)
 			return result;
 		
 		int n = (int)totalPixels(mat);
-//		var matSorted = new Mat();
-//		var mat2 = mat.reshape(1, n);
-//		opencv_core.sort(mat2, matSorted, opencv_core.CV_SORT_ASCENDING + opencv_core.CV_SORT_EVERY_COLUMN);
 		
-		var percentile = new Percentile();
-		
+		var percentile = createPercentile();
+				
 		// Sort, then strip NaNs
 		double[] values = OpenCVTools.extractDoubles(mat);
 		Arrays.sort(values);
@@ -951,27 +993,67 @@ public class OpenCVTools {
 		}
 		if (n < values.length)
 			values = Arrays.copyOf(values, n);
+
+		double minValue = Double.NaN;
+		boolean minSet = false;
 		
 		// Set data
 		// We can't rely on Percentile to strip NaNs (it appears not to)
 		percentile.setData(values);
-		for (int i = 0; i < percentiles.length; i++)
-			result[i] = percentile.evaluate(percentiles[i]);
+		for (int i = 0; i < percentiles.length; i++) {
+			if (percentiles[i] == 0.0) {
+				if (!minSet) {
+					minValue = Arrays.stream(values).filter(d -> !Double.isNaN(d)).min().orElse(Double.NaN);
+					minSet = true;
+				}
+				result[i] = minValue;
+			} else
+				result[i] = percentile.evaluate(percentiles[i]);
+		}
 		return result;
+	}
+	
+	/**
+	 * Stream-based percentile method.
+	 * @param mat
+	 * @param doParallel
+	 * @param doSort
+	 * @param percentiles
+	 * @return
+	 * @since v0.4.0
+	 */
+	static double[] percentilesStream(Mat mat, boolean doParallel, boolean doSort, double... percentiles) {
+		double[] result = new double[percentiles.length];
+		if (result.length == 0)
+			return result;
 		
-//		int n = (int)mat.total();
-//		var mat2 = mat.reshape(1, n);
-//		var matSorted = new Mat();
-//		
-//		opencv_core.sort(mat2, matSorted, opencv_core.CV_SORT_ASCENDING + opencv_core.CV_SORT_EVERY_COLUMN);
-//		try (var idx = matSorted.createIndexer()) {
-//			for (int i = 0; i < result.length; i++) {
-//				long ind = (long)(percentiles[i] / 100.0 * (n - 1));
-//				result[i] = idx.getDouble(ind);
-//			}
-//		}
-//		matSorted.release();
-//		return result;
+		var percentile = createPercentile();
+				
+		// Create a customized stream to filter out NaNs, optionally using sorting & parallelization
+		double[] values = OpenCVTools.extractDoubles(mat);
+		var stream = Arrays.stream(values);
+		if (doParallel)
+			stream = stream.parallel();
+		if (doSort)
+			stream = stream.sorted();
+		values = stream.filter(d -> !Double.isNaN(d)).toArray();
+
+		double minValue = Double.NaN;
+		boolean minSet = false;
+		
+		// Set data - NaNs should be stripped beforehand, since they aren't here (despite what the docs might suggest)
+		percentile.setData(values);
+		for (int i = 0; i < percentiles.length; i++) {
+			if (percentiles[i] == 0.0) {
+				if (!minSet) {
+					minValue = Arrays.stream(values).filter(d -> !Double.isNaN(d)).min().orElse(Double.NaN);
+					minSet = true;
+				}
+				result[i] = minValue;
+			} else
+				result[i] = percentile.evaluate(percentiles[i]);
+		}
+		return result;
 	}
 	
 	
@@ -1886,6 +1968,17 @@ public class OpenCVTools {
 	    	return temp.clone();
 		}
 	}
+	
+	/**
+	 * Crop a region from a Mat by stripping off padding, returning a new image (not a subregion).
+	 * @param mat
+	 * @param padding 
+	 * @return
+	 * @since v0.4.0
+	 */
+	public static Mat crop(Mat mat, Padding padding) {
+		return crop(mat, padding.getX1(), padding.getY1(), mat.cols() - padding.getXSum(), mat.rows() - padding.getYSum());
+	}
 
 
 	/**
@@ -1906,29 +1999,69 @@ public class OpenCVTools {
 	 * @param mat the input Mat
 	 * @param tileWidth the strict tile width required by the input
 	 * @param tileHeight the strict tile height required by the input
+	 * @param padding padding to apply for <i>internal</i> tiling. Note that if the entire image needs to be padded, this should 
+	 *                be done before input.
 	 * @param borderType an OpenCV border type, in case padding is needed
 	 * @return the result of applying fun to mat, having applied any necessary tiling along the way
 	 */
-	@SuppressWarnings("unchecked")
-	public static Mat applyTiled(Function<Mat, Mat> fun, Mat mat, int tileWidth, int tileHeight, int borderType) {
+	public static Mat applyTiled(Function<Mat, Mat> fun, Mat mat, int tileWidth, int tileHeight, Padding padding, int borderType) {
 		
 		int top = 0, bottom = 0, left = 0, right = 0;
 	    boolean doPad = false;
 		Mat matResult = new Mat();
 		
+		int width = mat.cols();
+		int height = mat.rows();
+		
 		try (var scope = new PointerScope()) {
 			if (mat.cols() > tileWidth) {
+				// Handle a row
+				var paddingY = Padding.getPadding(0, 0, padding.getY1(), padding.getY2());
 				List<Mat> horizontal = new ArrayList<>();
-				for (int x = 0; x < mat.cols(); x += tileWidth) {
-		    		Mat matTemp = applyTiled(fun, mat.colRange(x, Math.min(x+tileWidth, mat.cols())).clone(), tileWidth, tileHeight, borderType);
+				int xStart = 0;
+				boolean lastTile = false;
+				while (!lastTile) {
+					int xEnd = Math.min(xStart+tileWidth, width);
+		    		Mat matTemp = applyTiled(fun, mat.colRange(xStart, xEnd).clone(), tileWidth, tileHeight, 
+		    				paddingY,
+		    				borderType);
+		    		// Crop internal padding from x
+		    		int pad1 = xStart == 0 ? 0 : padding.getX1();
+		    		int pad2 = 0;
+		    		if (xEnd >= width) {
+		    			lastTile = true;
+		    			pad2 = xEnd - width;
+		    		} else
+		    			pad2 = padding.getX2();
+		    		cropX(matTemp, pad1, pad2);
+		    		if (matTemp.cols() == 0)
+		    			break;
+		    		xStart = xEnd - padding.getX1() - pad2;
 		    		horizontal.add(matTemp);
 				}
-				opencv_core.hconcat(new MatVector(horizontal.toArray(new Mat[0])), matResult);
+				opencv_core.hconcat(new MatVector(horizontal.toArray(Mat[]::new)), matResult);
 				return matResult;
 			} else if (mat.rows() > tileHeight) {
+				// Handle a column
+				var paddingX = Padding.getPadding(padding.getX1(), padding.getX2(), 0, 0);
 				List<Mat> vertical = new ArrayList<>();
-				for (int y = 0; y < mat.rows(); y += tileHeight) {
-		    		Mat matTemp = applyTiled(fun, mat.rowRange(y, Math.min(y+tileHeight, mat.rows())).clone(), tileWidth, tileHeight, borderType);
+				int yStart = 0;
+				boolean lastTile = false;
+				while (!lastTile) {
+					int yEnd = Math.min(yStart+tileHeight, height);
+		    		Mat matTemp = applyTiled(fun, mat.rowRange(yStart, yEnd).clone(), tileWidth, tileHeight, 
+		    				paddingX,
+		    				borderType);
+		    		// Crop internal padding from y
+		    		int pad1 = yStart == 0 ? 0 : padding.getY1();
+		    		int pad2 = 0;
+		    		if (yEnd >= height) {
+		    			lastTile = true;
+		    			pad2 = yEnd - height;
+		    		} else
+		    			pad2 = padding.getY2();
+		    		cropY(matTemp, pad1, pad2);
+		    		yStart = yEnd - padding.getY1() - pad2;
 		    		vertical.add(matTemp);
 				}
 				opencv_core.vconcat(new MatVector(vertical.toArray(Mat[]::new)), matResult);
@@ -1947,23 +2080,58 @@ public class OpenCVTools {
 			
 			// Do the actual requested function
 			matResult.put(fun.apply(mat));
-			
+						
 			// Automatic resizing isn't ideal, but otherwise the padding calculations can't be used
 			// (resizing is also handy to support an early StarDist implementation)
-			if (matResult.rows() != mat.rows() || matResult.cols() != mat.cols()) {
-				logger.warn("Resizing tiled image from {}x{} to {}x{}", matResult.cols(), matResult.rows(), mat.cols(), mat.rows());
+			int nRows = mat.rows();
+			int nCols = mat.cols();
+			if (matResult.rows() != nRows || matResult.cols() != nCols) {
+				logger.warn("Resizing tiled image from {}x{} to {}x{}", matResult.cols(), matResult.rows(), nRows, nCols);
 				opencv_imgproc.resize(matResult, matResult, mat.size());
 			}
 			
 			// Handle padding
-		    if (doPad) {
-		    	matResult.put(crop(matResult, left, top, tileWidth-right-left, tileHeight-top-bottom));
+			if (doPad) {
+	    		matResult.put(crop(matResult,
+	    				left,
+	    				top,
+	    				matResult.cols() - right - left,
+	    				matResult.rows( ) - top - bottom));
 		    }
-		    
-//		    scope.deallocate();
+			
 		}
 	    
 	    return matResult;
+	}
+	
+	/**
+	 * Crop columns, in-place.
+	 * @param mat
+	 * @param x1 pixels to remove from the left
+	 * @param x2 pixels to remove from the right
+	 */
+	private static void cropX(Mat mat, int x1, int x2) {
+		if (x1 == 0 && x2 == 0)
+			return;
+		if (x1 < 0 || x2 < 0)
+			throw new IllegalArgumentException("Cannot crop x by a negative amount (" + x1 + ", " + x2 + ")");
+		int width = mat.cols();
+		mat.put(mat.colRange(x1, width-x2));
+	}
+	
+	/**
+	 * Crop rows, in-place.
+	 * @param mat
+	 * @param y1 pixels to remove from the top
+	 * @param y2 pixels to remove from the bottom
+	 */
+	private static void cropY(Mat mat, int y1, int y2) {
+		if (y1 == 0 && y2 == 0)
+			return;
+		if (y1 < 0 || y2 < 0)
+			throw new IllegalArgumentException("Cannot crop y by a negative amount (" + y1 + ", " + y2 + ")");
+		int height = mat.rows();
+		mat.put(mat.rowRange(y1, height-y2));
 	}
 	
 	

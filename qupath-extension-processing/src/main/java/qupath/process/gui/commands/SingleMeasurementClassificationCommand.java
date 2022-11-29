@@ -53,7 +53,6 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
-import javafx.scene.paint.Color;
 import javafx.stage.Modality;
 import qupath.lib.analysis.stats.Histogram;
 import qupath.lib.classifiers.object.ObjectClassifier;
@@ -233,7 +232,7 @@ public class SingleMeasurementClassificationCommand implements Runnable {
 			
 			var chartWrapper = new ThresholdedChartWrapper(histogramPane.getChart());
 			chartWrapper.setIsInteractive(true);
-			chartWrapper.addThreshold(sliderThreshold.valueProperty(), Color.rgb(0, 0, 0, 0.2));
+			chartWrapper.addThreshold(sliderThreshold.valueProperty());
 			
 			histogramPane.getChart().getYAxis().setTickLabelsVisible(false);
 			histogramPane.getChart().setAnimated(false);

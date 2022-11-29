@@ -2,7 +2,7 @@
  * #%L
  * This file is part of QuPath.
  * %%
- * Copyright (C) 2021 QuPath developers, The University of Edinburgh
+ * Copyright (C) 2021-2022 QuPath developers, The University of Edinburgh
  * %%
  * QuPath is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -58,12 +58,10 @@ import org.bytedeco.opencv.opencv_dnn.SegmentationModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import qupath.lib.classifiers.object.ObjectClassifiers;
 import qupath.lib.common.GeneralTools;
+import qupath.lib.common.LogTools;
 import qupath.lib.geom.Point2;
 import qupath.lib.images.servers.ImageServer;
-import qupath.lib.io.GsonTools;
-import qupath.lib.io.GsonTools.SubTypeAdapterFactory;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjectTools;
 import qupath.lib.objects.classes.PathClass;
@@ -77,70 +75,43 @@ import qupath.opencv.tools.OpenCVTools;
  * Tools for working with OpenCV's DNN module.
  * 
  * @author Pete Bankhead
- * @version 0.3.0
+ * @since 0.3.0
  */
 public class DnnTools {
 	
 	private static final Logger logger = LoggerFactory.getLogger(DnnTools.class);
-	
-	@SuppressWarnings("rawtypes")
-	private static final SubTypeAdapterFactory<DnnModel> dnnAdapter;
-	
-	@SuppressWarnings("rawtypes")
-	private static final SubTypeAdapterFactory<BlobFunction> blobAdapter;
-	
-	@SuppressWarnings("rawtypes")
-	private static final SubTypeAdapterFactory<PredictionFunction> predictionAdapter;
-	
-	static {
-		
-		blobAdapter = GsonTools.createSubTypeAdapterFactory(BlobFunction.class, "blob_fun")
-				.registerSubtype(DefaultBlobFunction.class);
-		
-		predictionAdapter = GsonTools.createSubTypeAdapterFactory(PredictionFunction.class, "prediction_fun");
-		
-		dnnAdapter = GsonTools.createSubTypeAdapterFactory(DnnModel.class, "dnn_model")
-				.registerSubtype(DefaultDnnModel.class)
-				.registerSubtype(OpenCVDnn.class);
-		
-		ObjectClassifiers.ObjectClassifierTypeAdapterFactory.registerSubtype(OpenCVModelObjectClassifier.class);
-		ObjectClassifiers.ObjectClassifierTypeAdapterFactory.registerSubtype(DnnObjectClassifier.class);
-
-		GsonTools.getDefaultBuilder()
-				.registerTypeAdapterFactory(blobAdapter)
-				.registerTypeAdapterFactory(predictionAdapter)
-				.registerTypeAdapterFactory(dnnAdapter);
-		
-	}
-	
 	
 	/**
 	 * Register a new {@link DnnModel} class for JSON serialization/deserialization.
 	 * @param <T>
 	 * @param subtype
 	 * @param name
+	 * @deprecated since v0.4.0; use {@link DnnModels#registerDnnModel(Class, String)} instead.
 	 */
 	@SuppressWarnings("rawtypes")
+	@Deprecated
 	public static <T extends DnnModel> void registerDnnModel(Class<T> subtype, String name) {
-		if (name == null || name.isBlank())
-			dnnAdapter.registerSubtype(subtype);
-		else
-			dnnAdapter.registerSubtype(subtype, name);
+		LogTools.warnOnce(logger, "DnnTools.registerDnnModel is deprecated - use DnnModels.registerDnnModel instead");
+		DnnModels.registerDnnModel(subtype, name);
 	}
 	
 	
 	/**
-	 * Initiative building and configurating an {@link OpenCVDnn}.
+	 * Initiative building and configuring an {@link OpenCVDnn}.
+	 * <p>
+	 * Note that {@link DnnModels#buildModel(DnnModelParams)} should generally be used instead 
+	 * to create an arbitrary {@link DnnModel}, since it can potentially use different libraries 
+	 * or frameworks.
 	 * 
 	 * @param modelPath
 	 * @return
 	 * @apiNote since {@link OpenCVDnn} is used to build other things (e.g. a {@link Net}, a {@link Model}), 
 	 *          this is, rather inelegantly, a builder for a builder. However the difference is that, once you have 
 	 *          an {@link OpenCVDnn}, configuration is fixed.
+	 * @see DnnModels#buildModel(DnnModelParams)
 	 */
 	public static OpenCVDnn.Builder builder(String modelPath) {
 		return OpenCVDnn.builder(modelPath);
-				
 	}
 	
 	
@@ -480,10 +451,10 @@ public class DnnTools {
 		} else {
 			double scaledWidth = width * downsample;
 			double scaledHeight = height * downsample;
-			int xi = (int)Math.floor(roi.getCentroidX() - scaledWidth/2.0);
-			int yi = (int)Math.floor(roi.getCentroidY() - scaledHeight/2.0);
-			int xi2 = (int)Math.ceil(roi.getCentroidX() + scaledWidth/2.0);
-			int yi2 = (int)Math.ceil(roi.getCentroidY() + scaledHeight/2.0);
+			int xi = (int)Math.round(roi.getCentroidX() - scaledWidth/2.0);
+			int yi = (int)Math.round(roi.getCentroidY() - scaledHeight/2.0);
+			int xi2 = (int)Math.round(xi + scaledWidth);
+			int yi2 = (int)Math.round(yi + scaledHeight);
 			
 			int x = GeneralTools.clipValue(xi, 0, server.getWidth());
 			int x2 = GeneralTools.clipValue(xi2, 0, server.getWidth());

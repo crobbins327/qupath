@@ -86,6 +86,7 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.RadioMenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.SplitPane;
@@ -95,6 +96,7 @@ import javafx.scene.control.Toggle;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.Clipboard;
+import javafx.scene.input.ContextMenuEvent;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
@@ -340,6 +342,10 @@ public class DefaultScriptEditor implements ScriptEditor {
 	protected BooleanProperty smartEditing = PathPrefs.createPersistentPreference("scriptingSmartEditing", true);
 	private BooleanProperty wrapTextProperty = PathPrefs.createPersistentPreference("scriptingWrapText", false);
 	
+	/**
+	 * Experimental option introduced in v0.4.0 - likely to be turned on by default in future releases
+	 */
+	private BooleanProperty useCompiled = PathPrefs.createPersistentPreference("scriptingUseCompiled", false);
 
 	// Regex pattern used to identify whether a script should be run in the JavaFX Platform thread
 	// If so, this line should be included at the top of the script
@@ -476,6 +482,7 @@ public class DefaultScriptEditor implements ScriptEditor {
 	 * @param file the file to test
 	 * @return true if the file is likely to contain a supported script, false otherwise
 	 */
+	@Override
 	public boolean supportsFile(final File file) {
 		if (file == null || !file.isFile())
 			return false;
@@ -815,7 +822,9 @@ public class DefaultScriptEditor implements ScriptEditor {
 				ActionTools.createCheckMenuItem(ActionTools.createSelectableAction(sendLogToConsole, "Show log in console")),
 				ActionTools.createCheckMenuItem(ActionTools.createSelectableAction(outputScriptStartTime, "Log script time")),
 				ActionTools.createCheckMenuItem(ActionTools.createSelectableAction(autoClearConsole, "Auto clear console")),
-				ActionTools.createCheckMenuItem(ActionTools.createSelectableAction(clearCache, "Clear cache (batch processing)"))
+				ActionTools.createCheckMenuItem(ActionTools.createSelectableAction(clearCache, "Clear cache (batch processing)")),
+				null,
+				ActionTools.createCheckMenuItem(ActionTools.createSelectableAction(useCompiled, "Use compiled scripts"))
 				);
 		menubar.getMenus().add(menuRun);
 		
@@ -1063,7 +1072,7 @@ public class DefaultScriptEditor implements ScriptEditor {
 	 * @param batchSave
 	 */
 	private void executeScript(final ScriptTab tab, final String script, final Project<BufferedImage> project, final ImageData<BufferedImage> imageData, 
-			int batchIndex, int batchSize, boolean batchSave) {
+			int batchIndex, int batchSize, boolean batchSave, boolean useCompiled) {
 		var language = tab.getLanguage();
 		
 		if (!(language instanceof ExecutableLanguage))
@@ -1082,6 +1091,7 @@ public class DefaultScriptEditor implements ScriptEditor {
 				.setImageData(imageData)
 				.setBatchIndex(batchIndex)
 				.setBatchSize(batchSize)
+				.useCompiled(useCompiled)
 				.setBatchSaveResult(batchSave);
 		
 		if (useDefaultBindings.get()) {
@@ -1200,12 +1210,35 @@ public class DefaultScriptEditor implements ScriptEditor {
 	
 	
 	static class ScriptObjectListCell extends ListCell<ScriptTab> {
+		
+		private Tooltip tooltip = new Tooltip();
+		private ContextMenu popup = new ContextMenu();
+		
+		ScriptObjectListCell() {
+			super();
+			var miOpenDirectory = new MenuItem("Open directory...");
+			miOpenDirectory.disableProperty().bind(itemProperty().isNull());
+			miOpenDirectory.setOnAction(e -> {
+				var item = getItem();
+				var file = item == null ? null : item.getFile();
+				if (file == null)
+					return;
+				GuiTools.browseDirectory(file);
+			});
+			popup.getItems().add(miOpenDirectory);
+			addEventFilter(ContextMenuEvent.CONTEXT_MENU_REQUESTED, e -> {
+				if (getItem() == null || getItem().getFile() == null)
+					e.consume();
+			});
+		}
+		
         @Override
         public void updateItem(ScriptTab item, boolean empty) {
             super.updateItem(item, empty);
             if (item == null || empty) {
             	setText(null);
             	setTooltip(null);
+            	setContextMenu(null);
              	return;
             }
             var text = item.toString();
@@ -1215,8 +1248,9 @@ public class DefaultScriptEditor implements ScriptEditor {
             } else
             	setStyle(null);
             setText(text);
-            setTooltip(new Tooltip(text));
-//            this.setOpacity(0);
+            tooltip.setText(text);
+            setTooltip(tooltip);
+            setContextMenu(popup);
         }
     }
 	
@@ -1430,7 +1464,7 @@ public class DefaultScriptEditor implements ScriptEditor {
 				logger.info("Running script in Platform thread...");
 				try {
 					tab.setRunning(true);
-					executeScript(tab, script, qupath.getProject(), qupath.getImageData(), 0, 1, false);
+					executeScript(tab, script, qupath.getProject(), qupath.getImageData(), 0, 1, false, useCompiled.get());
 				} finally {
 					tab.setRunning(false);
 					runningTask.setValue(null);
@@ -1441,7 +1475,7 @@ public class DefaultScriptEditor implements ScriptEditor {
 					public void run() {
 						try {
 							tab.setRunning(true);
-							executeScript(tab, script, qupath.getProject(), qupath.getImageData(), 0, 1, false);
+							executeScript(tab, script, qupath.getProject(), qupath.getImageData(), 0, 1, false, useCompiled.get());
 						} finally {
 							tab.setRunning(false);
 							Platform.runLater(() -> runningTask.setValue(null));
@@ -1523,7 +1557,7 @@ public class DefaultScriptEditor implements ScriptEditor {
 		
 		List<ProjectImageEntry<BufferedImage>> imagesToProcess = new ArrayList<>(previousImages);
 
-		ProjectTask worker = new ProjectTask(project, imagesToProcess, tab, doSave);
+		ProjectTask worker = new ProjectTask(project, imagesToProcess, tab, doSave, useCompiled.get());
 		
 		
 		ProgressDialog progress = new ProgressDialog(worker);
@@ -1583,12 +1617,14 @@ public class DefaultScriptEditor implements ScriptEditor {
 		private ScriptTab tab;
 		private boolean quietCancel = false;
 		private boolean doSave = false;
+		private boolean useCompiled = false;
 		
-		ProjectTask(final Project<BufferedImage> project, final Collection<ProjectImageEntry<BufferedImage>> imagesToProcess, final ScriptTab tab, final boolean doSave) {
+		ProjectTask(final Project<BufferedImage> project, final Collection<ProjectImageEntry<BufferedImage>> imagesToProcess, final ScriptTab tab, final boolean doSave, final boolean useCompiled) {
 			this.project = project;
 			this.imagesToProcess = imagesToProcess;
 			this.tab = tab;
 			this.doSave = doSave;
+			this.useCompiled = useCompiled;
 		}
 		
 		public void quietCancel() {
@@ -1631,7 +1667,7 @@ public class DefaultScriptEditor implements ScriptEditor {
 						continue;
 					}
 //					QPEx.setBatchImageData(imageData);
-					executeScript(tab, tab.getEditorControl().getText(), project, imageData, batchIndex, batchSize, doSave);
+					executeScript(tab, tab.getEditorControl().getText(), project, imageData, batchIndex, batchSize, doSave, useCompiled);
 					if (doSave)
 						entry.saveImageData(imageData);
 					imageData.getServer().close();
