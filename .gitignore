@@ -40,3 +40,4 @@ bin/
 qupath-extension-companalysis/
 qupath-extension-debugscripteditor/
 qupath-extension-qiimia/
+settings.gradle
