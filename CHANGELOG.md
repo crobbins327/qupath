@@ -1,3 +1,20 @@
+## Version 0.4.2
+
+This is a *minor release* that aims to be fully compatible with v0.4.0 and v0.4.1 while fixing bugs.
+
+### Enhancements
+* Height of Brightness/Contrast pane is no longer limited to 800 pixels (https://github.com/qupath/qupath/issues/1201)
+
+### Bugs fixed
+* Exception when setting point colors/classifications in v0.4.1 (https://github.com/qupath/qupath/issues/1202)
+* Setting the default object color in the preferences doesn't update the toolbar icons (https://github.com/qupath/qupath/issues/1203)
+* Setting a note for a TMA core doesn't initialize to use the existing value (https://github.com/qupath/qupath/issues/1206)
+* Script editor doesn't refresh when in focus (https://github.com/qupath/qupath/issues/1208)
+* 'A bound value cannot be set' exception when filtering measurement tables (https://github.com/qupath/qupath/issues/1209)
+* Extensions jars aren't loaded for batch scripts from the command line (https://github.com/qupath/qupath/issues/1211)
+* Cancelling 'Search' when fixing URIs results in an exception (https://github.com/qupath/qupath/issues/1213)
+
+
 ## Version 0.4.1
 
 This is a *minor release* that aims to be fully compatible with v0.4.0 while fixing bugs.
