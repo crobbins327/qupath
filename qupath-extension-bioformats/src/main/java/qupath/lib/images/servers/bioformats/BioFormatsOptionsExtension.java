@@ -84,7 +84,7 @@ public class BioFormatsOptionsExtension implements QuPathExtension {
 		BooleanProperty enableBioformats = PathPrefs.createPersistentPreference("bfEnableBioformats", options.bioformatsEnabled());
 		BooleanProperty filesOnly = PathPrefs.createPersistentPreference("bfFilesOnly", options.getFilesOnly());
 		BooleanProperty useParallelization = PathPrefs.createPersistentPreference("bfUseParallelization", options.requestParallelization());
-		IntegerProperty memoizationTimeMillis = PathPrefs.createPersistentPreference("bfMemoizationTimeMillis", options.getMemoizationTimeMillis());
+		IntegerProperty memoizationTimeMillis = PathPrefs.createPersistentPreference("bfMemoizationTimeMS", options.getMemoizationTimeMillis());
 //		BooleanProperty parallelizeMultichannel = PathPrefs.createPersistentPreference("bfParallelizeMultichannel", options.requestParallelizeMultichannel());
 
 //		BooleanProperty requestChannelZCorrectionVSI = PathPrefs.createPersistentPreference("bfChannelZCorrectionVSI", options.requestChannelZCorrectionVSI());
@@ -120,7 +120,7 @@ public class BioFormatsOptionsExtension implements QuPathExtension {
 		// Add preferences to QuPath GUI
 		PreferencePane prefs = QuPathGUI.getInstance().getPreferencePane();
 		prefs.addPropertyPreference(enableBioformats, Boolean.class, "Enable Bio-Formats", "Bio-Formats", "Allow QuPath to use Bio-Formats for image reading");
-		prefs.addPropertyPreference(filesOnly, Boolean.class, "Bio-Formats files only", "Bio-Formats", "Limit Bio-Formats to only opening files, not other URLs.\n"
+		prefs.addPropertyPreference(filesOnly, Boolean.class, "Local files only", "Bio-Formats", "Limit Bio-Formats to only opening local files, not other URLs.\n"
 				+ "Allowing Bio-Formats to open URLs can cause performance issues if this results in attempting to open URLs intended to be read using other image servers.");
 		prefs.addPropertyPreference(useParallelization, Boolean.class, "Enable Bio-Formats tile parallelization", "Bio-Formats", "Enable reading image tiles in parallel when using Bio-Formats");
 //		prefs.addPropertyPreference(parallelizeMultichannel, Boolean.class, "Enable Bio-Formats channel parallelization (experimental)", "Bio-Formats", "Request multiple image channels in parallel, even if parallelization of tiles is turned off - "
@@ -131,8 +131,6 @@ public class BioFormatsOptionsExtension implements QuPathExtension {
 			
 			prefs.addDirectoryPropertyPreference(pathMemoization, "Bio-Formats memoization directory", "Bio-Formats",
 					"Choose directory where Bio-Formats should write cache files for memoization; by default the directory where the image is stored will be used");
-			
-			logMemoizationStatus(options);
 		}
 		
 		prefs.addPropertyPreference(useExtensions, String.class, "Always use Bio-Formats for specified image extensions", "Bio-Formats", 
@@ -142,19 +140,6 @@ public class BioFormatsOptionsExtension implements QuPathExtension {
 
 //		prefs.addPropertyPreference(requestChannelZCorrectionVSI, Boolean.class, "Correct VSI channel/z-stack confusion", "Bio-Formats", "Attempt to fix a bug that means some VSI files have different channels wrongly displayed as different z-slices");
 	}
-	
-	
-	private void logMemoizationStatus(BioFormatsServerOptions options) {
-		if (BioFormatsServerOptions.allowMemoization()) {
-			int millis = options.getMemoizationTimeMillis();
-			if (millis < 0) {
-				logger.info("If Bio-Formats is slow to load images, setting the Bio-Formats memoization time in QuPath's preferences may help (this will create temp files)");
-			} else {
-				logger.info("Bio-Formats memoization time limit: {} ms (temp files may be created to speed up image loading)", millis);
-			}
-		}
-	}
-	
 
 	private static void fillCollectionWithTokens(String text, Collection<String> collection) {
 		fillCollectionWithTokens(new StringTokenizer(text), collection);

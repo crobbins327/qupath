@@ -31,8 +31,6 @@ import java.util.TreeSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import qupath.lib.common.Version;
-
 /**
  * Container for various options that can customize the behavior of the {@link BioFormatsImageServer}.
  * 
@@ -53,40 +51,37 @@ public class BioFormatsServerOptions {
 	 */
 	public static String ALLOW_MEMOIZATION_PROPERTY = "qupath.bioformats.allow.memoization";
 	
-	private static boolean allowMemoization = checkIfMemoizationSupported();
+	private static boolean allowMemoization = true;
 	
-	private static boolean checkIfMemoizationSupported() {
+	static {
 		String prop = System.getProperty(ALLOW_MEMOIZATION_PROPERTY);
 		if (prop != null)
 			prop = prop.strip().toLowerCase();
 		if ("true".equals(prop)) {
-			logger.info("Bio-Formats memoization is enabled (based on system property)");
-			return true;
+			logger.info("Bio-Formats memoization is turned ON (based on system property)");
+			allowMemoization = true;
 		} else if ("false".equals(prop)) {
-			logger.info("Bio-Formats memoization is unavailable (based on system property)");
-			return false;
+			logger.info("Bio-Formats memoization is turned OFF (based on system property)");
+			allowMemoization = false;
 		} else {
 			try {
-				// Memoization worked before Java 17
 				var javaVersion = Runtime.version();
-				if (javaVersion.feature() < 17)
-					return true;
-				else {
-					// Memoization for Java 17 is first fixed in Bio-Formats 6.12.0
-					var bfVersionString = BioFormatsServerBuilder.getBioFormatsVersion();
-					var bfVersion = bfVersionString == null ? Version.parse("0.0.1") : Version.parse(bfVersionString);
-					boolean compatibleBioFormats = bfVersion.compareTo(Version.parse("6.12.0")) >= 0; // Currently, the latest Bio-Formats (6.10.0) is not compatible
-					if (compatibleBioFormats) {
-						logger.debug("Bio-Formats memoization is enabled (based on Java " + javaVersion + ", Bio-Formats " + bfVersion + ")");
-						return true;
-					} else {
-						logger.debug("Bio-Formats memoization is unavailable (based on Java " + javaVersion + ", Bio-Formats " + bfVersion + ")");
-						return false;
-					}					
+//				var bfVersionString = BioFormatsServerBuilder.getBioFormatsVersion();
+//				var bfVersion = bfVersionString == null? null : Version.parse(bfVersionString);
+//				boolean compatibleBioFormats = bfVersion == null ? true : bfVersion.compareTo(Version.parse("6.10.0")) >= 0;
+				var bfVersion = BioFormatsServerBuilder.getBioFormatsVersion();
+				boolean compatibleBioFormats = false; // Currently, the latest Bio-Formats (6.10.0) is not compatible
+				if (javaVersion.feature() >= 17 && !compatibleBioFormats) {
+					logger.info("Bio-Formats memoization is turned OFF (based on Java " + javaVersion + ", Bio-Formats " + bfVersion + ")");
+					allowMemoization = false;
+				} else {
+					// Note that this does require --illegal-access=permit as a VM arg
+					logger.info("Bio-Formats memoization is turned ON (based on Java " + javaVersion + ", Bio-Formats " + bfVersion + ")");
+					allowMemoization = true;
 				}
 			} catch (Exception e) {
-				logger.warn("Bio-Formats memoization is enabled, but may not be supported (unknown Java or Bio-Formats version)");
-				return true;				
+				logger.info("Bio-Formats memoization is turned ON (default value, unknown Java or Bio-Formats version)");
+				allowMemoization = true;				
 			}
 		}
 	}
@@ -117,7 +112,7 @@ public class BioFormatsServerOptions {
 	
 	private boolean requestParallelization = true;
 	private boolean filesOnly = true;
-	private int memoizationTimeMillis = -1;
+	private int memoizationTimeMillis = 500;
 //	private boolean requestParallelizeMultichannel = false;
 	private String pathMemoization;
 	

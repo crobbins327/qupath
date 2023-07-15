@@ -4,7 +4,7 @@
  * %%
  * Copyright (C) 2014 - 2016 The Queen's University of Belfast, Northern Ireland
  * Contact: IP Management (ipmanagement@qub.ac.uk)
- * Copyright (C) 2018 - 2023 QuPath developers, The University of Edinburgh
+ * Copyright (C) 2018 - 2020 QuPath developers, The University of Edinburgh
  * %%
  * QuPath is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -24,7 +24,6 @@
 package qupath.lib.plugins.parameters;
 
 import java.io.Serializable;
-import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -36,12 +35,7 @@ import java.util.Map.Entry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonSerializationContext;
-import com.google.gson.JsonSerializer;
-
 import qupath.lib.io.GsonTools;
-import qupath.lib.objects.classes.PathClass;
 
 
 /**
@@ -631,23 +625,7 @@ public class ParameterList implements Serializable {
 	 * @see #convertToJson(ParameterList)
 	 */
 	public static String convertToJson(Map<String, ?> map) {
-		// Serialize PathClass with toString() - aim to fix https://github.com/qupath/qupath/issues/1226
-		return GsonTools.getDefaultBuilder()
-				.registerTypeAdapter(PathClass.class, new PathClassStringSerializer())
-				.create()
-				.toJson(map);
-	}
-	
-	private static class PathClassStringSerializer implements JsonSerializer<PathClass> {
-
-		@Override
-		public JsonElement serialize(PathClass src, Type typeOfSrc, JsonSerializationContext context) {
-			if (src == null)
-				return context.serialize(null);
-			else
-				return context.serialize(src.toString());
-		}
-		
+		return GsonTools.getInstance(false).toJson(map);		
 	}
 	
 	/**
@@ -659,8 +637,7 @@ public class ParameterList implements Serializable {
 	 */
 	public static String convertToJson(ParameterList params) {
 		var map = params.getKeyValueParameters(false);
-		var json = convertToJson(map);
-		return json;
+		return convertToJson(map);
 	}
 	
 	
