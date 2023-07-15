@@ -1,11 +1,47 @@
-## Version 0.4.3-SNAPSHOT
+## Version 0.5.0-SNAPSHOT
 
-This is a work-in-progress containing minor changes from v0.4.2.
+This is a work-in-progress for the next QuPath release.
 
-v0.4.3 will be released if there are enough bugs to fix... otherwise the changes will be incorporated into v0.5.0.
+### Dependency updates
+* DeepJavaLibrary 0.21.0
+* Groovy 4.0.10
+* ImageJ 1.54c
+* JavaFX 20
+
+
+## Version 0.4.3
+
+This is a *minor release* that aims to be fully compatible with previous v0.4.x releases, while fixing bugs.
+
+### Enhancements
+* Update to Bio-Formats 6.12.0
+  * See https://bio-formats.readthedocs.io/en/v6.12.0/about/whats-new.html
+* Add support for Bio-Formats memoization (again) (https://github.com/qupath/qupath/issues/1236)
+  * To use memoization, set the 'Bio-Formats memoization time' in QuPath's preferences
 
 ### Bugs fixed
 * Opening the same image in multiple viewers results in detections being wrongly shown in both (https://github.com/qupath/qupath/issues/1217)
+* 'Transform annotations' can't be applied to selected objects when double-clicking to end the transform (https://github.com/qupath/qupath/issues/1231)
+* Unusable script generated for 'Add intensity features' with some tile shapes (https://github.com/qupath/qupath/issues/1227)
+* Unusable generated for 'Expand annotations' with some line caps (https://github.com/qupath/qupath/issues/1227)
+* 'Tile classifications to annotations' is broken (https://github.com/qupath/qupath/issues/1226)
+* Directory preferences cannot be reset (https://github.com/qupath/qupath/issues/1240)
+
+### Dependency updates
+* Bio-Formats 6.12.0
+* Groovy 4.0.9
+* JFreeSVG 5.0.5
+
+
+### Dependency updates
+* Bio-Formats 6.12.0
+* Groovy 4.0.9
+* ImageJ 1.54b
+* JavaFX 19.0.2
+* JFreeSVG 5.0.4
+* JFXtras 17-r1
+* Picocli 4.7.1
+* SLF4J 2.0.6
 
 
 ## Version 0.4.2

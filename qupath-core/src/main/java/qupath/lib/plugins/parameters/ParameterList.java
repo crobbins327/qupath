@@ -296,7 +296,7 @@ public class ParameterList implements Serializable {
 	 * @return
 	 */
 	public <S> ParameterList addChoiceParameter(String key, String prompt, S defaultValue, List<S> choices, String helpText) {
-		params.put(key, new ChoiceParameter<S>(prompt, defaultValue, choices, helpText));
+		params.put(key, new ChoiceParameter<>(prompt, defaultValue, choices, helpText));
 		return this;
 	}
 	
@@ -315,7 +315,7 @@ public class ParameterList implements Serializable {
 	 * @return
 	 */
 	public Map<String, Object> getKeyValueParameters(final boolean includeHidden) {
-		Map<String, Object> map = new LinkedHashMap<String, Object>();
+		Map<String, Object> map = new LinkedHashMap<>();
 		for (Entry<String, Parameter<?>> entry : getParameters().entrySet()) {
 			Parameter<?> p = entry.getValue();
 			if (p instanceof EmptyParameter || (!includeHidden && p.isHidden()))
@@ -466,7 +466,7 @@ public class ParameterList implements Serializable {
 	 * @param key
 	 * @return
 	 */
-	public Parameter<? extends Object> removeParameter(String key) {
+	public Parameter<?> removeParameter(String key) {
 		return params.remove(key);
 	}
 	
